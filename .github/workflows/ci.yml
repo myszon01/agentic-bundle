@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
+      - run: node bin/agentic-bundle.js validate
+      - run: node bin/agentic-bundle.js build all
+      - name: Install round trip
+        run: |
+          dir=$(mktemp -d)
+          node bin/agentic-bundle.js install all --dir "$dir"
+          node bin/agentic-bundle.js uninstall all --dir "$dir"
+          test -z "$(ls -A "$dir")"

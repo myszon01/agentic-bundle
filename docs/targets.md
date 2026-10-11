@@ -1,0 +1,90 @@
+# Targets
+
+Where each part of the harness goes. Paths are relative to the project directory (`--scope project`)
+or the tool's user config directory (`--scope user`).
+
+These tools change quickly. If a path drifts, the fix is usually a one-line change in `lib/targets/<id>.js`.
+
+## Claude Code (`claude`)
+
+| harness       | project                          | user                       | package (`dist/claude`) |
+|---------------|----------------------------------|----------------------------|-------------------------|
+| AGENTS.md     | `CLAUDE.md` (managed block)      | `~/.claude/CLAUDE.md`      | `AGENTS.md` + `SessionStart` hook that prints it |
+| skills        | `.claude/skills/<name>/`         | `~/.claude/skills/`        | `skills/` |
+| commands      | `.claude/commands/<name>.md`     | `~/.claude/commands/`      | `commands/` |
+| agents        | `.claude/agents/<name>.md`       | `~/.claude/agents/`        | `agents/` |
+| MCP           | `.mcp.json` → `mcpServers`       | `~/.claude.json` → `mcpServers` | `.mcp.json` |
+
+The package is a Claude Code **plugin** with its own single-plugin `marketplace.json`:
+
+```
+/plugin marketplace add ./dist/claude
+/plugin install agentic-bundle@agentic-bundle
+```
+
+## OpenCode (`opencode`)
+
+| harness   | project                         | user (`~/.config/opencode`) |
+|-----------|---------------------------------|-----------------------------|
+| AGENTS.md | `AGENTS.md` (managed block)     | `AGENTS.md`                 |
+| skills    | `.opencode/skills/<name>/`      | `skills/`                   |
+| commands  | `.opencode/commands/<name>.md`  | `commands/`                 |
+| agents    | `.opencode/agents/<name>.md` (`mode: subagent`, tools as a boolean map) | `agents/` |
+| MCP       | `opencode.json` → `mcp` (`local` / `remote`) | `opencode.json` |
+
+The package is the project layout; copy `dist/opencode/.` into a repository. `opencode.jsonc` files with
+comments are not merged automatically; the installer prints the keys to add by hand.
+
+## Gemini CLI (`gemini`)
+
+| harness   | project                           | user (`~/.gemini`) |
+|-----------|-----------------------------------|--------------------|
+| AGENTS.md | `GEMINI.md` (managed block)       | `GEMINI.md`        |
+| skills    | `.gemini/skills/<name>/`          | `skills/`          |
+| commands  | `.gemini/commands/<name>.toml` (`$ARGUMENTS` → `{{args}}`) | `commands/` |
+| agents    | `.gemini/agents/<name>.md` (experimental; needs `experimental.enableAgents`) | `agents/` |
+| MCP       | `.gemini/settings.json` → `mcpServers` (`httpUrl` for http, `url` for sse) | `settings.json` |
+
+The package is a Gemini CLI **extension**:
+
+```
+gemini extensions install ./dist/gemini      # or: gemini extensions link ./dist/gemini
+```
+
+## pi (`pi`)
+
+| harness   | project                       | user (`~/.pi/agent`) |
+|-----------|-------------------------------|----------------------|
+| AGENTS.md | `AGENTS.md` (managed block)   | `AGENTS.md`          |
+| skills    | `.pi/skills/<name>/`          | `skills/`            |
+| commands  | `.pi/prompts/<name>.md` (`$ARGUMENTS` → `$@`) | `prompts/` |
+| agents    | not supported (skipped with a warning) | |
+| MCP       | not supported by design (skipped with a warning; write a pi extension if you need it) | |
+
+The package is a **pi package** (`package.json` with a `pi` manifest):
+
+```
+pi install ./dist/pi
+```
+
+`PI_CODING_AGENT_DIR` overrides the user directory.
+
+## Codex CLI (`codex`)
+
+| harness   | project                           | user (`~/.codex`, or `$CODEX_HOME`) |
+|-----------|-----------------------------------|-------------------------------------|
+| AGENTS.md | `AGENTS.md` (managed block)       | `AGENTS.md`                         |
+| skills    | `.codex/skills/<name>/`           | `skills/`                           |
+| commands  | not available per project (warning) | `prompts/<name>.md`               |
+| agents    | not supported (skipped with a warning) | |
+| MCP       | `.codex/config.toml` (managed block) | `config.toml` (managed block)    |
+
+The package mirrors `~/.codex`. Copy it in and append `config.toml` to your existing one.
+
+## Adding a target
+
+1. Create `lib/targets/<id>.js` that exports `{ id, label, supports, install(bundle, ctx), package(bundle, ctx) }`.
+   Both functions return entries (`file`, `block` or `json`, see `lib/targets/common.js`). The writer handles
+   merging, manifests and uninstalling.
+2. Register it in `lib/targets/index.js`, and add tool names to `lib/tools.js` if the tool supports subagents.
+3. Add a test in `test/targets.test.js` and a section to this file.

@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.agentic-bundle/
+*.log
+.DS_Store
