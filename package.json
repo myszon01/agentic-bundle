@@ -1,0 +1,46 @@
+{
+  "name": "@myszon01/agentic-bundle",
+  "version": "0.1.0",
+  "description": "Write your agentic harness once (instructions, skills, commands, subagents, MCP servers) and ship it to Claude Code, OpenCode, Gemini CLI, pi, Codex and more.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/myszon01/agentic-bundle.git"
+  },
+  "homepage": "https://github.com/myszon01/agentic-bundle#readme",
+  "type": "module",
+  "bin": {
+    "agentic-bundle": "bin/agentic-bundle.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "harness",
+    "docs"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "validate": "node bin/agentic-bundle.js validate",
+    "build": "node bin/agentic-bundle.js build all",
+    "build:npm": "node bin/agentic-bundle.js build all --npm",
+    "init": "node scripts/init.js",
+    "version": "node scripts/sync-version.js && git add harness/bundle.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "keywords": [
+    "agents",
+    "claude-code",
+    "opencode",
+    "gemini-cli",
+    "pi",
+    "codex",
+    "skills",
+    "mcp",
+    "agents-md"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

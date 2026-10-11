@@ -1,0 +1,83 @@
+name: Release
+
+# Push a tag like v0.2.0 (`npm version minor && git push --follow-tags`) to publish
+# the CLI and one npm package per tool. Run manually for a dry run.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build and pack everything, but don't publish
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing (OIDC)
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: npm test
+      - run: node bin/agentic-bundle.js validate
+      - name: Tag, package.json and bundle.json versions must match
+        if: github.ref_type == 'tag'
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          bundle=$(node -p "require('./harness/bundle.json').version")
+          echo "tag=$GITHUB_REF_NAME package.json=$pkg bundle.json=$bundle"
+          test "$GITHUB_REF_NAME" = "v$pkg" && test "$pkg" = "$bundle"
+      - id: list
+        run: echo "list=$(node scripts/packages.js)" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.prepare.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+      - run: scripts/pack.sh "${{ matrix.package }}" artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: artifacts/*.tgz
+          if-no-files-found: error
+      - name: Publish to npm
+        env:
+          # Used for the first publish of each package; afterwards npm trusted publishing (OIDC) can replace it.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+        run: |
+          tgz=$(ls ./artifacts/*.tgz)
+          meta=$(tar -xOzf "$tgz" package/package.json)
+          name=$(node -p "JSON.parse(process.argv[1]).name" "$meta")
+          version=$(node -p "JSON.parse(process.argv[1]).version" "$meta")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already published; skipping"
+            exit 0
+          fi
+          if [ "$DRY_RUN" = true ]; then
+            npm publish "$tgz" --access public --dry-run
+          else
+            npm publish "$tgz" --access public
+          fi

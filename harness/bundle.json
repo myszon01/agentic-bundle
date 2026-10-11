@@ -1,0 +1,25 @@
+{
+  "name": "agentic-bundle",
+  "version": "0.1.0",
+  "description": "A portable agentic harness: shared instructions, skills, commands, subagents and MCP servers.",
+  "author": {
+    "name": "myszon01"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/myszon01/agentic-bundle",
+  "keywords": [
+    "harness",
+    "skills",
+    "workflow"
+  ],
+  "targets": [
+    "claude",
+    "opencode",
+    "gemini",
+    "pi",
+    "codex"
+  ],
+  "npm": {
+    "scope": "@myszon01"
+  }
+}
