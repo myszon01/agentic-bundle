@@ -28,7 +28,7 @@ To keep the harness somewhere else (for example in a dotfiles repo), pass `--sou
 
 ## AGENTS.md — instructions
 
-Plain Markdown. It is written into each tool's instruction file (`CLAUDE.md`, `GEMINI.md`, `AGENTS.md`) as a
+Plain Markdown. It is written into each tool's instruction file (`CLAUDE.md`, `AGENTS.md`) as a
 **managed block**, so any instructions already in those files are left alone.
 
 ## Skills
@@ -56,13 +56,13 @@ argument-hint: "[path]"                        # optional
 tools: [read, grep, bash]                      # optional, canonical names (see below)
 model: { claude: sonnet }                      # optional, string or per-target map
 agent: build                                   # optional, OpenCode only
-targets: [claude, gemini]                      # optional, restrict to these targets
+targets: [claude, codex]                      # optional, restrict to these targets
 ---
 
 Review $ARGUMENTS using the code-review skill.
 ```
 
-Write `$ARGUMENTS` for the user's arguments; it is rewritten where a tool needs it (`{{args}}` for Gemini).
+Write `$ARGUMENTS` for the user's arguments; it is rewritten where a tool needs it.
 
 ## Agents
 
@@ -84,18 +84,18 @@ System prompt for the agent…
 
 ## Canonical tool names
 
-| canonical  | Claude Code | OpenCode    | Gemini CLI            | pi     |
-|------------|-------------|-------------|-----------------------|--------|
-| `read`     | Read        | read        | read_file             | read   |
-| `write`    | Write       | write       | write_file            | write  |
-| `edit`     | Edit        | edit        | replace               | edit   |
-| `bash`     | Bash        | bash        | run_shell_command     | bash   |
-| `grep`     | Grep        | grep        | grep_search           | grep   |
-| `glob`     | Glob        | glob        | glob                  | find   |
-| `list`     | LS          | list        | list_directory        | ls     |
-| `webfetch` | WebFetch    | webfetch    | web_fetch             | —      |
-| `websearch`| WebSearch   | websearch   | google_web_search     | —      |
-| `todo`     | TodoWrite   | todowrite   | write_todos           | —      |
+| canonical  | Claude Code | OpenCode    | pi     |
+|------------|-------------|-------------|--------|
+| `read`     | Read        | read        | read   |
+| `write`    | Write       | write       | write  |
+| `edit`     | Edit        | edit        | edit   |
+| `bash`     | Bash        | bash        | bash   |
+| `grep`     | Grep        | grep        | grep   |
+| `glob`     | Glob        | glob        | find   |
+| `list`     | LS          | list        | ls     |
+| `webfetch` | WebFetch    | webfetch    | —      |
+| `websearch`| WebSearch   | websearch   | —      |
+| `todo`     | TodoWrite   | todowrite   | —      |
 
 Any other name is passed through unchanged (with a validation warning), so you can still use tool-specific
 names such as `mcp__fetch__fetch`, ideally together with `targets:`.
@@ -109,7 +109,7 @@ names such as `mcp__fetch__fetch`, ideally together with `targets:`.
     "github": {
       "url": "https://api.githubcopilot.com/mcp/",
       "headers": { "Authorization": "Bearer ${GITHUB_TOKEN}" },
-      "targets": ["claude", "opencode", "gemini"]
+      "targets": ["claude", "opencode", "codex"]
     }
   }
 }
@@ -121,6 +121,5 @@ names such as `mcp__fetch__fetch`, ideally together with `targets:`.
 | `url`, `headers`, `transport`   | remote server; `transport` is `http` (default) or `sse`. |
 | `targets`   | optional target filter. |
 
-Reference environment variables as `${VAR}`. They are converted per tool: kept as-is for Claude Code
-and Gemini CLI, `{env:VAR}` for OpenCode, and `env_vars` / `bearer_token_env_var` / `env_http_headers`
+Reference environment variables as `${VAR}`. They are converted per tool: kept as-is for Claude Code, `{env:VAR}` for OpenCode, and `env_vars` / `bearer_token_env_var` / `env_http_headers`
 for Codex. **Never put secret values in `mcp.json`.**

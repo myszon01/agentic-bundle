@@ -19,8 +19,8 @@ function build(id) {
 }
 
 test('package names are scoped per target', () => {
-  assert.equal(npmName(bundle, TARGETS.gemini), `${bundle.manifest.npm.scope}/${bundle.name}-gemini`);
-  assert.equal(npmName(bundle, TARGETS.gemini, ''), `${bundle.name}-gemini`);
+  assert.equal(npmName(bundle, TARGETS.opencode), `${bundle.manifest.npm.scope}/${bundle.name}-opencode`);
+  assert.equal(npmName(bundle, TARGETS.opencode, ''), `${bundle.name}-opencode`);
   assert.equal(npmName(bundle, TARGETS.pi, '@other'), `@other/${bundle.name}-pi`);
 });
 

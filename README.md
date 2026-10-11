@@ -5,13 +5,12 @@
 Your instructions, skills, slash commands, subagents and MCP servers live in a single canonical folder
 (`harness/`). A small, dependency-free CLI translates them into each tool's native format. It can install
 them straight into a project or your home directory, or build packages you can distribute: a Claude Code
-plugin, a Gemini CLI extension, a pi package and so on.
+plugin, a pi package and so on.
 
 | tool | id | instructions | skills | commands | subagents | MCP |
 |------|----|:-:|:-:|:-:|:-:|:-:|
 | [Claude Code](https://code.claude.com) | `claude` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [OpenCode](https://opencode.ai) | `opencode` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `gemini` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [pi](https://github.com/badlogic/pi-mono) | `pi` | ✅ | ✅ | ✅ | — | — (by design) |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | ✅ | ✅ | user scope | ✅ | ✅ |
 
@@ -32,7 +31,7 @@ node bin/agentic-bundle.js validate
 node bin/agentic-bundle.js install all --dir ~/code/my-project
 
 # 3b. ...or into your user config, for selected tools
-node bin/agentic-bundle.js install claude gemini --scope user
+node bin/agentic-bundle.js install claude codex --scope user
 
 # Preview first, undo later
 node bin/agentic-bundle.js install all --dry-run
@@ -80,7 +79,7 @@ agentic-bundle uninstall [targets...] [--scope project|user] [--dir .] [--dry-ru
 agentic-bundle targets
 ```
 
-`targets` can be any of `claude opencode gemini pi codex all`, either as bare words or as `--target a,b`.
+`targets` can be any of `claude opencode pi codex all`, either as bare words or as `--target a,b`.
 If you give none, the `targets` list in `bundle.json` is used.
 
 ## Distributing
@@ -91,7 +90,6 @@ Everything is published to npm, so nobody needs access to this repository. A rel
 |---------|-----|--------------|
 | `@myszon01/agentic-bundle` | the CLI + harness, every tool | `npx -y @myszon01/agentic-bundle install <tools> [--scope user]` |
 | `@myszon01/agentic-bundle-claude` | Claude Code plugin | `tar -xzf "$(npm pack @myszon01/agentic-bundle-claude \| tail -1)"`, then `claude plugin marketplace add ./package` |
-| `@myszon01/agentic-bundle-gemini` | Gemini CLI extension | unpack the same way, then `gemini extensions install ./package` |
 | `@myszon01/agentic-bundle-pi` | pi package | `pi install npm:@myszon01/agentic-bundle-pi` |
 | `@myszon01/agentic-bundle-opencode` | OpenCode project files | the CLI, or unpack and copy into a project |
 | `@myszon01/agentic-bundle-codex` | `~/.codex` files | the CLI, or unpack and copy into `~/.codex` |
@@ -103,7 +101,7 @@ The per-tool package names come from `harness/bundle.json` (`name` plus `npm.sco
 
 ```bash
 node bin/agentic-bundle.js build all --npm     # dist/<tool>/ with package.json + README
-scripts/pack.sh gemini artifacts               # one tool → artifacts/*.tgz (or "cli" for the CLI)
+scripts/pack.sh pi artifacts               # one tool → artifacts/*.tgz (or "cli" for the CLI)
 ```
 
 ### Releasing
@@ -154,8 +152,8 @@ Variables*).
 ## How install stays safe
 
 - **Shared files are merged, not overwritten.** Instructions go into a marked block in `CLAUDE.md`,
-  `GEMINI.md` or `AGENTS.md`. MCP servers are merged key by key into `.mcp.json`, `opencode.json`,
-  `.gemini/settings.json` or `~/.claude.json`, and into a marked block in Codex's `config.toml`.
+  or `AGENTS.md`. MCP servers are merged key by key into `.mcp.json`, `opencode.json`,
+  or `~/.claude.json`, and into a marked block in Codex's `config.toml`.
   Everything else in those files is left untouched.
 - **Every write is recorded** in `.agentic-bundle/<bundle>.<target>.json`. Re-installing updates in place
   and removes anything you deleted from the harness. `uninstall` removes exactly what was added.
