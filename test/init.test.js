@@ -11,7 +11,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function templateCopy() {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'agentic-bundle-init-'));
-  for (const f of ['package.json', 'README.md', 'LICENSE', 'harness', 'scripts', '.github']) {
+  for (const f of ['package.json', 'README.md', 'SETUP-SERVICE.md', 'LICENSE', 'harness', 'scripts', '.github']) {
     cpSync(path.join(ROOT, f), path.join(dir, f), { recursive: true });
   }
   return dir;
@@ -40,6 +40,16 @@ test('init renames the CLI, bundle, owner and README references', () => {
   assert.ok(readme.includes('npx -y @acme/my-plugin install'));
   assert.ok(!readme.includes(before), 'old CLI name is gone from the README');
   assert.match(readFileSync(path.join(dir, 'LICENSE'), 'utf8'), /Copyright \(c\) \d{4} Acme/);
+});
+
+test('init removes the template\'s setup-service page and README section', () => {
+  const dir = templateCopy();
+  assert.ok(readFileSync(path.join(dir, 'README.md'), 'utf8').includes('<!-- setup-service -->'), 'the template README has the section');
+  run(dir, '--repo', 'acme/tools');
+  assert.ok(!existsSync(path.join(dir, 'SETUP-SERVICE.md')));
+  const readme = readFileSync(path.join(dir, 'README.md'), 'utf8');
+  assert.ok(!readme.includes('setup-service') && !readme.includes('SETUP-SERVICE'));
+  assert.match(readme, /## Development[\s\S]*## License/);
 });
 
 test('init --clean leaves an empty but valid harness, and can be re-run', async () => {
