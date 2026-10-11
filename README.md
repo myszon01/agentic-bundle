@@ -111,43 +111,46 @@ CI builds every package as its own artifact on each pull request (download them 
 
 ```bash
 # 1. Bump the version on a branch and merge it through a pull request
-git switch -c release/v0.2.0 origin/main
+git switch -c release/v0.3.0 origin/main
 npm version minor --no-git-tag-version     # bumps package.json and harness/bundle.json together
-git commit -am "chore: release v0.2.0"
-git push -u origin release/v0.2.0          # open a PR, get it reviewed, merge it
+git commit -am "chore: release v0.3.0"
+git push -u origin release/v0.3.0          # open a PR, get it reviewed, merge it
 
-# 2. Tag the merged commit on main; the tag starts the Release workflow
+# 2. Publish a GitHub release with tag v0.3.0 on main (Releases → Draft a new release),
+#    or tag it yourself; the tag starts the Release workflow
 git switch main && git pull
-git tag v0.2.0 && git push origin v0.2.0
-
-# 3. When the workflow is done, approve the staged packages (npm asks for your 2FA code)
-npm install -g npm@12                      # staged publishing needs npm 12
-npm login
-npm run approve                            # or: npm run approve -- --dry-run, to only list them
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
 The Release workflow checks that the tag, `package.json` and `bundle.json` versions match, then packs all
-six packages and **stages** them on npm with `npm stage publish`. Staged packages are uploaded but not
-public: nothing goes live until a maintainer approves it with 2FA, so the CI token never needs publish
-rights. Versions that are already published or staged are skipped, so re-running a release is safe.
-*Actions → Release → Run workflow* does a dry run. The workflow's summary lists every staged package.
+five packages (the CLI plus one per tool) and sends them to npm in one of two modes:
+
+- **Publish (`NPM_PUBLISH_MODE=publish`, used by this repository):** packages go live straight away
+  through npm **Trusted Publishing**: npm trusts this repository's `release.yml`, so no npm token is
+  stored, and each package gets a provenance badge. Publishing the GitHub release is the approval step.
+- **Stage (the default):** packages are uploaded with `npm stage publish` but stay private until a
+  maintainer approves them with 2FA: `npm install -g npm@12 && npm login && npm run approve`.
+
+Versions that are already published or staged are skipped, so re-running a release is safe.
+*Actions → Release → Run workflow* does a dry run. The workflow's summary lists every package.
 
 The first release (`v0.1.0`) needs no version bump: tag the current `main`.
 
 **One-time npm setup:**
 1. Create the `@myszon01` scope on npmjs.com (it's your npm username, or an org with that name), and turn
-   on 2FA for your account; approving staged packages requires it. If the name differs, change `name` in
-   `package.json` and `npm.scope` in `harness/bundle.json` (or run `npm run init`).
-2. Create a granular access token with read/write access to that scope; it does **not** need to bypass
-   2FA. Add it as the repository secret `NPM_TOKEN` (*Settings → Secrets and variables → Actions*).
-3. Optional, after the first release: on npmjs.com, add this repository and `release.yml` as a
-   *Trusted Publisher* for each package, allowing only staged publishing
-   (`npm trust github <package> --file release.yml --repo myszon01/agentic-bundle --allow-stage-publish`).
-   The token can then be deleted.
+   on 2FA for your account. If the name differs, change `name` in `package.json` and `npm.scope` in
+   `harness/bundle.json` (or run `npm run init`).
+2. For the first release, create a granular access token with read/write access to that scope; it does
+   **not** need to bypass 2FA. Add it as the repository secret `NPM_TOKEN` (*Settings → Secrets and
+   variables → Actions*). The first release is staged; approve it with `npm run approve`.
+3. Then switch to Trusted Publishing: on npmjs.com, for each package, open *Settings → Trusted
+   Publisher → GitHub Actions* and enter this repository and `release.yml` (or run
+   `npm trust github <package> --file release.yml --repo myszon01/agentic-bundle`). Set the repository
+   variable `NPM_PUBLISH_MODE` to `publish` (*Settings → Secrets and variables → Actions → Variables*),
+   and delete the `NPM_TOKEN` secret. To keep a manual 2FA gate instead, allow only staged publishing
+   (`--allow-stage-publish`) and leave `NPM_PUBLISH_MODE` unset.
 
-To publish directly instead of staging (for a token or trusted publisher that is allowed to publish), set
-the repository variable `NPM_PUBLISH_MODE` to `publish` (*Settings → Secrets and variables → Actions →
-Variables*).
+Things Trusted Publishing can't do, such as `npm deprecate`, are done by hand with 2FA.
 
 ## How install stays safe
 
