@@ -23,6 +23,7 @@
     "build": "node bin/agentic-bundle.js build all",
     "build:npm": "node bin/agentic-bundle.js build all --npm",
     "init": "node scripts/init.js",
+    "approve": "node scripts/approve.js",
     "version": "node scripts/sync-version.js && git add harness/bundle.json"
   },
   "engines": {

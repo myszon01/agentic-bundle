@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.2.0 (`npm version minor && git push --follow-tags`) to publish
-# the CLI and one npm package per tool. Run manually for a dry run.
+# Push a tag like v0.2.0 on main to release the CLI and one npm package per tool
+# (see README → Releasing). Packages are *staged* on npm by default and go live once a
+# maintainer approves them with 2FA (`npm run approve`). Run manually for a dry run.
 
 on:
   push:
@@ -15,7 +16,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm trusted publishing (OIDC)
+  id-token: write # npm trusted publishing (OIDC), if configured
 
 concurrency:
   group: release
@@ -62,10 +63,14 @@ jobs:
           name: ${{ matrix.package }}
           path: artifacts/*.tgz
           if-no-files-found: error
-      - name: Publish to npm
+      - name: npm with staged publishing
+        run: npm install -g npm@12
+      - name: Stage on npm (or publish, if NPM_PUBLISH_MODE=publish)
         env:
-          # Used for the first publish of each package; afterwards npm trusted publishing (OIDC) can replace it.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # "stage" (default): upload without 2FA; a maintainer approves with `npm run approve`.
+          # "publish": go live immediately; needs a token (or trusted publisher) allowed to publish.
+          MODE: ${{ vars.NPM_PUBLISH_MODE || 'stage' }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
         run: |
           tgz=$(ls ./artifacts/*.tgz)
@@ -73,11 +78,26 @@ jobs:
           name=$(node -p "JSON.parse(process.argv[1]).name" "$meta")
           version=$(node -p "JSON.parse(process.argv[1]).version" "$meta")
           if npm view "$name@$version" version >/dev/null 2>&1; then
-            echo "$name@$version is already published; skipping"
+            echo "$name@$version is already published; skipping" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          if [ "$DRY_RUN" = true ]; then
-            npm publish "$tgz" --access public --dry-run
+          if [ "$MODE" = stage ]; then
+            # Re-runs: a version that is already staged can't be staged again.
+            staged=$(npm stage list "$name" --json 2>/dev/null || echo '[]')
+            if node -e "process.exit(JSON.parse(process.argv[1]).some(i => i.version === process.argv[2] && i.status !== 'rejected') ? 0 : 1)" "$staged" "$version"; then
+              echo "$name@$version is already staged; skipping" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            cmd="npm stage publish"
           else
-            npm publish "$tgz" --access public
+            cmd="npm publish"
+          fi
+          flags="--access public"
+          note=""
+          if [ "$DRY_RUN" = true ]; then flags="$flags --dry-run"; note="(dry run) "; fi
+          $cmd "$tgz" $flags
+          if [ "$MODE" = stage ]; then
+            echo "${note}Staged \`$name@$version\`: approve with \`npm run approve\` (2FA)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "${note}Published \`$name@$version\`." >> "$GITHUB_STEP_SUMMARY"
           fi
