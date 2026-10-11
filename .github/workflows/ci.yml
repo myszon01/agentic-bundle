@@ -53,8 +53,16 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: scripts/pack.sh "${{ matrix.package }}" artifacts
+      # Once a version is on npm, a dry run fails with "cannot publish over"; skip it until the next bump.
       - name: Check the tarball would publish
-        run: npm publish ./artifacts/*.tgz --dry-run --access public
+        run: |
+          tgz=$(ls artifacts/*.tgz)
+          spec=$(tar -xOzf "$tgz" package/package.json | node -p 'const p = JSON.parse(require("fs").readFileSync(0)); `${p.name}@${p.version}`')
+          if [ -n "$(npm view "$spec" version 2>/dev/null)" ]; then
+            echo "$spec is already on npm; skipping the publish dry run (bump the version to release)."
+          else
+            npm publish "$tgz" --dry-run --access public
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.package }}
