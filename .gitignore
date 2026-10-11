@@ -3,3 +3,4 @@ dist/
 .agentic-bundle/
 *.log
 .DS_Store
+artifacts/

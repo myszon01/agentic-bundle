@@ -19,7 +19,7 @@ Features a tool lacks are skipped with a warning, never silently.
 
 ## Quick start
 
-Requires Node.js 18.17 or later. There are no dependencies to install.
+Requires Node.js 24 or later (developed on Node 26, see `.nvmrc`). There are no dependencies to install.
 
 ```bash
 # 1. Fork or clone, then edit harness/ to taste
@@ -39,11 +39,16 @@ node bin/agentic-bundle.js install all --dry-run
 node bin/agentic-bundle.js uninstall all --dir ~/code/my-project
 ```
 
-Without cloning, you can run it straight from GitHub. `--source` points at your own harness folder, which
-can live anywhere, for example in your dotfiles:
+Without cloning anything, install the published harness from npm:
 
 ```bash
-npx github:myszon01/agentic-bundle install all --scope user --source ~/dotfiles/harness
+npx -y @myszon01/agentic-bundle install all --scope user
+```
+
+`--source` points the same CLI at your own harness folder instead, for example one in your dotfiles:
+
+```bash
+npx -y @myszon01/agentic-bundle install all --scope user --source ~/dotfiles/harness
 ```
 
 ## What's in the box
@@ -80,21 +85,48 @@ If you give none, the `targets` list in `bundle.json` is used.
 
 ## Distributing
 
-**Option 1: the installer.** Teammates run `install` (or the `npx` one-liner above) against your fork.
-This is the only route that applies every feature for every tool.
+Everything is published to npm, so nobody needs access to this repository. A release produces six packages:
 
-**Option 2: native packages.** `build` writes one package per tool to `dist/<target>/`:
+| package | for | install with |
+|---------|-----|--------------|
+| `@myszon01/agentic-bundle` | the CLI + harness, every tool | `npx -y @myszon01/agentic-bundle install <tools> [--scope user]` |
+| `@myszon01/agentic-bundle-claude` | Claude Code plugin | `tar -xzf "$(npm pack @myszon01/agentic-bundle-claude \| tail -1)"`, then `claude plugin marketplace add ./package` |
+| `@myszon01/agentic-bundle-gemini` | Gemini CLI extension | unpack the same way, then `gemini extensions install ./package` |
+| `@myszon01/agentic-bundle-pi` | pi package | `pi install npm:@myszon01/agentic-bundle-pi` |
+| `@myszon01/agentic-bundle-opencode` | OpenCode project files | the CLI, or unpack and copy into a project |
+| `@myszon01/agentic-bundle-codex` | `~/.codex` files | the CLI, or unpack and copy into `~/.codex` |
 
-| tool | install the package with |
-|------|--------------------------|
-| Claude Code | `/plugin marketplace add ./dist/claude` then `/plugin install <name>@<name>` |
-| Gemini CLI | `gemini extensions install ./dist/gemini` |
-| pi | `pi install ./dist/pi` |
-| OpenCode | copy `dist/opencode/.` into the repository |
-| Codex CLI | copy `dist/codex/.` into `~/.codex` (append `config.toml`) |
+Each tool package carries a README with its exact install steps. The CLI is the only route that applies
+every feature for every tool and merges with existing config, so prefer it when in doubt.
 
-On every push to `main`, the **Publish packages** workflow pushes each package to its own branch
-(`dist/claude`, `dist/gemini`, …). Each tool can then install from git at that ref instead of a local path.
+The per-tool package names come from `harness/bundle.json` (`name` plus `npm.scope`). To build them locally:
+
+```bash
+node bin/agentic-bundle.js build all --npm     # dist/<tool>/ with package.json + README
+scripts/pack.sh gemini artifacts               # one tool → artifacts/*.tgz (or "cli" for the CLI)
+```
+
+### Releasing
+
+CI builds every package as its own artifact on each pull request (download them from the run's
+*Artifacts* section). To publish:
+
+```bash
+npm version minor            # bumps package.json and harness/bundle.json, commits, tags v0.2.0
+git push --follow-tags       # the Release workflow publishes all six packages to npm
+```
+
+The release checks that the tag, `package.json` and `bundle.json` versions match, and skips any package
+version that is already on npm, so re-running a release is safe. *Actions → Release → Run workflow*
+does a dry run.
+
+**One-time npm setup:**
+1. Create the `@myszon01` scope on npmjs.com (it's your npm username, or an org with that name).
+   If the name differs, change `name` in `package.json` and `npm.scope` in `harness/bundle.json`.
+2. Create a granular access token with read/write access to that scope, and add it as the repository
+   secret `NPM_TOKEN` (*Settings → Secrets and variables → Actions*).
+3. Optional, after the first release: on npmjs.com, add this repository and `release.yml` as a
+   *Trusted Publisher* for each package. Releases then authenticate via OIDC and the token can be deleted.
 
 ## How install stays safe
 

@@ -87,8 +87,10 @@ The package mirrors `~/.codex`. Copy it in and append `config.toml` to your exis
 
 ## Adding a target
 
-1. Create `lib/targets/<id>.js` that exports `{ id, label, supports, install(bundle, ctx), package(bundle, ctx) }`.
+1. Create `lib/targets/<id>.js` that exports `{ id, label, supports, install(bundle, ctx), package(bundle, ctx), npmUsage({ name, cli, bundle }) }`.
+   `npmUsage` returns the Markdown install steps for the README of the tool's npm package.
    Both functions return entries (`file`, `block` or `json`, see `lib/targets/common.js`). The writer handles
    merging, manifests and uninstalling.
 2. Register it in `lib/targets/index.js`, and add tool names to `lib/tools.js` if the tool supports subagents.
-3. Add a test in `test/targets.test.js` and a section to this file.
+3. Add a test in `test/targets.test.js` and a section to this file. CI and the release workflow pick up the
+   new target automatically (`scripts/packages.js`).

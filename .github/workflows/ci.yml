@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        node: [18, 20, 22]
+        node: [24, 26]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,12 +27,46 @@ jobs:
           node bin/agentic-bundle.js uninstall all --dir "$dir"
           test -z "$(ls -A "$dir")"
 
+  packages:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - id: list
+        run: echo "list=$(node scripts/packages.js)" >> "$GITHUB_OUTPUT"
+
+  # One npm tarball per tool (plus the CLI), each uploaded as its own artifact.
+  package:
+    needs: packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.packages.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: scripts/pack.sh "${{ matrix.package }}" artifacts
+      - name: Check the tarball would publish
+        run: npm publish ./artifacts/*.tgz --dry-run --access public
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}
+          path: artifacts/*.tgz
+          if-no-files-found: error
+
   # Single stable check for branch protection, so the required check
-  # doesn't change whenever the test matrix does.
+  # doesn't change whenever the matrices do.
   ci-ok:
     name: ci-ok
     if: always()
-    needs: test
+    needs: [test, package]
     runs-on: ubuntu-latest
     steps:
-      - run: test "${{ needs.test.result }}" = success
+      - run: test "${{ needs.test.result }}" = success && test "${{ needs.package.result }}" = success

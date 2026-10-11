@@ -24,6 +24,7 @@ To keep the harness somewhere else (for example in a dotfiles repo), pass `--sou
 | `author`      | no       | `{ "name", "email", "url" }`. |
 | `license`, `homepage`, `repository`, `keywords` | no | Copied into package manifests. |
 | `targets`     | no       | Default target list when none is given on the command line. |
+| `npm.scope`   | no       | npm scope for the per-tool packages (`build --npm`), e.g. `@acme` → `@acme/<name>-claude`. |
 
 ## AGENTS.md — instructions
 
