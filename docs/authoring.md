@@ -61,7 +61,7 @@ targets: [claude, gemini]                      # optional, restrict to these tar
 Review $ARGUMENTS using the code-review skill.
 ```
 
-Write `$ARGUMENTS` for the user's arguments; it is rewritten per tool (`{{args}}` for Gemini, `$@` for pi).
+Write `$ARGUMENTS` for the user's arguments; it is rewritten where a tool needs it (`{{args}}` for Gemini).
 
 ## Agents
 
@@ -89,7 +89,7 @@ System prompt for the agent…
 | `write`    | Write       | write       | write_file            | write  |
 | `edit`     | Edit        | edit        | replace               | edit   |
 | `bash`     | Bash        | bash        | run_shell_command     | bash   |
-| `grep`     | Grep        | grep        | search_file_content   | grep   |
+| `grep`     | Grep        | grep        | grep_search           | grep   |
 | `glob`     | Glob        | glob        | glob                  | find   |
 | `list`     | LS          | list        | list_directory        | ls     |
 | `webfetch` | WebFetch    | webfetch    | web_fetch             | —      |

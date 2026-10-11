@@ -11,9 +11,9 @@ plugin, a Gemini CLI extension, a pi package and so on.
 |------|----|:-:|:-:|:-:|:-:|:-:|
 | [Claude Code](https://code.claude.com) | `claude` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [OpenCode](https://opencode.ai) | `opencode` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `gemini` | ✅ | ✅ | ✅ | 🧪 experimental | ✅ |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | `gemini` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [pi](https://github.com/badlogic/pi-mono) | `pi` | ✅ | ✅ | ✅ | — | — (by design) |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | ✅ | ✅ | user scope | — | ✅ |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | ✅ | ✅ | user scope | ✅ | ✅ |
 
 Features a tool lacks are skipped with a warning, never silently.
 

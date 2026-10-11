@@ -56,7 +56,7 @@ test('gemini: commands become TOML with {{args}}', () => {
   assert.ok(!toml.includes('$ARGUMENTS'));
 });
 
-test('opencode: env references and tool maps are converted', () => {
+test('opencode: env references and agent permissions are converted', () => {
   const custom = { ...bundle, mcp: [{ name: 'api', url: 'https://x', headers: { Authorization: 'Bearer ${TOKEN}' } }] };
   const { entries } = TARGETS.opencode.install(custom, { scope: 'project', dir: '/p', warn: noop });
   assert.deepEqual(find(entries, 'opencode.json').value.mcp.api, {
@@ -64,15 +64,26 @@ test('opencode: env references and tool maps are converted', () => {
   });
   const agent = parseFrontmatter(text(find(entries, '.opencode/agents/researcher.md')));
   assert.equal(agent.data.mode, 'subagent');
-  assert.equal(agent.data.tools.bash, false);
-  assert.equal(agent.data.tools.read, undefined);
+  assert.deepEqual(agent.data.permission, { '*': 'deny', read: 'allow', grep: 'allow', glob: 'allow', list: 'allow' });
+  assert.equal(Object.keys(agent.data.permission)[0], '*', 'deny-all must come first (last rule wins)');
 });
 
-test('pi: skips MCP and agents with warnings, rewrites $ARGUMENTS', () => {
+test('pi: skips MCP and agents with warnings, keeps $ARGUMENTS (pi supports it natively)', () => {
   const warnings = [];
   const { entries } = TARGETS.pi.install(bundle, { scope: 'project', dir: '/p', warn: (w) => warnings.push(w) });
   assert.ok(warnings.some((w) => w.includes('mcp')) && warnings.some((w) => w.includes('agents')));
-  assert.match(text(find(entries, '.pi/prompts/review.md')), /review \$@\./);
+  assert.match(text(find(entries, '.pi/prompts/review.md')), /review \$ARGUMENTS\./);
+});
+
+test('codex: skills go to .agents/skills and agents become TOML files', () => {
+  const project = TARGETS.codex.install(bundle, { scope: 'project', dir: '/p', warn: noop }).entries;
+  assert.ok(find(project, '.agents/skills/code-review/SKILL.md'));
+  const agent = text(find(project, '.codex/agents/researcher.toml'));
+  assert.match(agent, /^name = "researcher"\ndescription = "Read-only/);
+  assert.match(agent, /developer_instructions = '''\nYou are a read-only research agent/);
+  assert.ok(!/^model/m.test(agent), 'claude-only model must not leak into codex');
+  const user = TARGETS.codex.install(bundle, { scope: 'user', dir: '/p', warn: noop }).entries;
+  assert.ok(find(user, 'skills/code-review/SKILL.md') && find(user, 'agents/researcher.toml'));
 });
 
 test('codex: env refs become env_vars / bearer tokens', () => {

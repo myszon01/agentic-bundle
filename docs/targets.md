@@ -29,20 +29,22 @@ The package is a Claude Code **plugin** with its own single-plugin `marketplace.
 | AGENTS.md | `AGENTS.md` (managed block)     | `AGENTS.md`                 |
 | skills    | `.opencode/skills/<name>/`      | `skills/`                   |
 | commands  | `.opencode/commands/<name>.md`  | `commands/`                 |
-| agents    | `.opencode/agents/<name>.md` (`mode: subagent`, tools as a boolean map) | `agents/` |
+| agents    | `.opencode/agents/<name>.md` (`mode: subagent`, tools as a `permission` map: `"*": deny` plus the listed tools) | `agents/` |
 | MCP       | `opencode.json` → `mcp` (`local` / `remote`) | `opencode.json` |
 
 The package is the project layout; copy `dist/opencode/.` into a repository. `opencode.jsonc` files with
-comments are not merged automatically; the installer prints the keys to add by hand.
+comments are not merged automatically; the installer prints the keys to add by hand. OpenCode also loads
+`~/.claude/skills` and `~/.agents/skills` by default (`OPENCODE_DISABLE_EXTERNAL_SKILLS=1` turns that off),
+so skills installed for other tools can show up twice.
 
 ## Gemini CLI (`gemini`)
 
 | harness   | project                           | user (`~/.gemini`) |
 |-----------|-----------------------------------|--------------------|
 | AGENTS.md | `GEMINI.md` (managed block)       | `GEMINI.md`        |
-| skills    | `.gemini/skills/<name>/`          | `skills/`          |
+| skills    | `.gemini/skills/<name>/` (project skills need a trusted folder) | `skills/` |
 | commands  | `.gemini/commands/<name>.toml` (`$ARGUMENTS` → `{{args}}`) | `commands/` |
-| agents    | `.gemini/agents/<name>.md` (experimental; needs `experimental.enableAgents`) | `agents/` |
+| agents    | `.gemini/agents/<name>.md` (`kind: local`; the folder must be trusted) | `agents/` |
 | MCP       | `.gemini/settings.json` → `mcpServers` (`httpUrl` for http, `url` for sse) | `settings.json` |
 
 The package is a Gemini CLI **extension**:
@@ -57,8 +59,8 @@ gemini extensions install ./dist/gemini      # or: gemini extensions link ./dist
 |-----------|-------------------------------|----------------------|
 | AGENTS.md | `AGENTS.md` (managed block)   | `AGENTS.md`          |
 | skills    | `.pi/skills/<name>/`          | `skills/`            |
-| commands  | `.pi/prompts/<name>.md` (`$ARGUMENTS` → `$@`) | `prompts/` |
-| agents    | not supported (skipped with a warning) | |
+| commands  | `.pi/prompts/<name>.md` (`$ARGUMENTS` supported natively) | `prompts/` |
+| agents    | not built in (skipped with a warning; see `examples/extensions/subagent` in pi-mono) | |
 | MCP       | not supported by design (skipped with a warning; write a pi extension if you need it) | |
 
 The package is a **pi package** (`package.json` with a `pi` manifest):
@@ -74,11 +76,13 @@ pi install ./dist/pi
 | harness   | project                           | user (`~/.codex`, or `$CODEX_HOME`) |
 |-----------|-----------------------------------|-------------------------------------|
 | AGENTS.md | `AGENTS.md` (managed block)       | `AGENTS.md`                         |
-| skills    | `.codex/skills/<name>/`           | `skills/`                           |
-| commands  | not available per project (warning) | `prompts/<name>.md`               |
-| agents    | not supported (skipped with a warning) | |
+| skills    | `.agents/skills/<name>/`          | `skills/`                           |
+| commands  | not available per project (warning) | `prompts/<name>.md` (deprecated by Codex in favour of skills) |
+| agents    | `.codex/agents/<name>.toml` (`developer_instructions`; `tools` dropped, `model` only from a `codex` key) | `agents/` |
 | MCP       | `.codex/config.toml` (managed block) | `config.toml` (managed block)    |
 
+Codex only reads a project's `.codex/config.toml` once that project is **trusted**, either by accepting
+the trust prompt or with `[projects."<path>"] trust_level = "trusted"` in `~/.codex/config.toml`.
 The package mirrors `~/.codex`. Copy it in and append `config.toml` to your existing one.
 
 ## Adding a target
