@@ -1,6 +1,6 @@
 {
   "name": "agentic-bundle",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A portable agentic harness: shared instructions, skills, commands, subagents and MCP servers.",
   "author": {
     "name": "myszon01"
