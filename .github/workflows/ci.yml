@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -25,3 +26,13 @@ jobs:
           node bin/agentic-bundle.js install all --dir "$dir"
           node bin/agentic-bundle.js uninstall all --dir "$dir"
           test -z "$(ls -A "$dir")"
+
+  # Single stable check for branch protection, so the required check
+  # doesn't change whenever the test matrix does.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.test.result }}" = success

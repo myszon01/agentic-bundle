@@ -117,6 +117,11 @@ npm run build            # build all packages into dist/
 
 To support another tool, add an adapter in `lib/targets/` (see [docs/targets.md](docs/targets.md#adding-a-target)).
 
+## Contributing
+
+`main` is protected: changes land through pull requests that need a code-owner review and a green `ci-ok`
+check. See [docs/repository-setup.md](docs/repository-setup.md) for the ruleset and how to apply it.
+
 ## License
 
 MIT
