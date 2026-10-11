@@ -8,7 +8,7 @@ I set up agentic-bundle for your team so you write that setup once and every age
 
 ## What you get
 
-A fixed-price setup, done in about a week:
+A hands-on setup, done in about a week:
 
 - **One shared harness repository** for your team: a single folder of instructions, skills, commands,
   subagents and MCP servers.
@@ -22,18 +22,14 @@ A fixed-price setup, done in about a week:
 - **Three workflows written with you**, for example code review, a release checklist and onboarding.
 - **A 60-minute handover and written docs**, so your team owns it afterwards.
 
-**Optional support:** I keep the harness working as the agents change their formats, add up to two new
-skills a month, and answer questions within two business days.
+**Afterwards:** I'm around to answer questions and to help keep the harness working as the agents change
+their formats.
 
-## Price
+## Cost
 
-| | |
-|---|---|
-| Setup | **$1,500** fixed |
-| Pilot (first two teams) | **$1,000** fixed |
-| Support | **$300 / month**, cancel any time |
-
-Nothing to pay until we agree the scope in writing.
+Free while I pilot this with a few teams. In return I'd ask for honest feedback on what worked and what
+didn't. If I ever offer paid support later, you'll hear about it well before anything costs money, and
+everything set up for you stays yours.
 
 ## Is it a fit?
 
@@ -45,5 +41,5 @@ Nothing to pay until we agree the scope in writing.
 Reply to the message that brought you here, or [open an issue](https://github.com/myszon01/agentic-bundle/issues/new?title=Setup%20service)
 titled "Setup service" and I'll book a 20-minute call.
 
-Everything in this repository stays free and MIT-licensed. The service is for teams who'd rather have it
-set up for them.
+Everything in this repository stays free and MIT-licensed. The setup is for teams who'd rather have it done
+for them.
