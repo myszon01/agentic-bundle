@@ -1,6 +1,6 @@
 {
   "name": "@myszon01/agentic-bundle",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Write your agentic harness once (instructions, skills, commands, subagents, MCP servers) and ship it to Claude Code, OpenCode, pi, Codex and more.",
   "repository": {
     "type": "git",
