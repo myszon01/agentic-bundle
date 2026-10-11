@@ -56,7 +56,7 @@ jobs:
       # Once a version is on npm, a dry run fails with "cannot publish over"; skip it until the next bump.
       - name: Check the tarball would publish
         run: |
-          tgz=$(ls artifacts/*.tgz)
+          tgz=$(ls ./artifacts/*.tgz)  # the ./ matters: npm reads "artifacts/x.tgz" as a GitHub repo
           spec=$(tar -xOzf "$tgz" package/package.json | node -p 'const p = JSON.parse(require("fs").readFileSync(0)); `${p.name}@${p.version}`')
           if [ -n "$(npm view "$spec" version 2>/dev/null)" ]; then
             echo "$spec is already on npm; skipping the publish dry run (bump the version to release)."
