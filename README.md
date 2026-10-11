@@ -195,6 +195,13 @@ npm run build            # build all packages into dist/
 
 To support another tool, add an adapter in `lib/targets/` (see [docs/targets.md](docs/targets.md#adding-a-target)).
 
+<!-- setup-service -->
+## Need help setting it up?
+
+I offer a fixed-price setup for teams that use several coding agents: one shared harness, installed into
+every agent, with CI and private packages. See [SETUP-SERVICE.md](SETUP-SERVICE.md).
+<!-- /setup-service -->
+
 ## License
 
 MIT

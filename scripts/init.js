@@ -104,6 +104,13 @@ for (const file of ['README.md']) {
   if (existsSync(file)) writeFileSync(file, replaceAll(readFileSync(file, 'utf8'), pairs));
 }
 
+// The template's own setup-service offer doesn't belong in repositories made from it.
+rmSync('SETUP-SERVICE.md', { force: true });
+if (existsSync('README.md')) {
+  const readme = readFileSync('README.md', 'utf8').replace(/<!-- setup-service -->[\s\S]*?<!-- \/setup-service -->\n\n?/, '');
+  writeFileSync('README.md', readme);
+}
+
 if (opts.clean) {
   for (const dir of ['skills', 'commands', 'agents']) {
     const abs = path.join('harness', dir);
