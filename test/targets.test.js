@@ -7,15 +7,16 @@ import { parseFrontmatter } from '../lib/frontmatter.js';
 import { mcpToml } from '../lib/targets/codex.js';
 import { TARGETS, resolveTargets } from '../lib/targets/index.js';
 
-const HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'harness');
+const HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness');
 const bundle = await loadBundle(HARNESS);
 const noop = () => {};
 const find = (entries, p) => entries.find((e) => e.path === p);
 const text = (entry) => entry.content.toString();
 
-test('the shipped harness is valid', () => {
-  const { errors } = validateBundle(bundle);
-  assert.deepEqual(errors, []);
+test('the fixture harness and your harness/ are valid', async () => {
+  assert.deepEqual(validateBundle(bundle).errors, []);
+  const own = await loadBundle(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'harness'));
+  assert.deepEqual(validateBundle(own).errors, []);
 });
 
 test('every target installs and packages without throwing', () => {

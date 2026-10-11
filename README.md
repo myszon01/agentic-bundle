@@ -139,6 +139,29 @@ does a dry run.
 - **Foreign files are never clobbered.** If a skill, command or agent file already exists and this bundle
   did not create it, the install skips it and warns you, unless you pass `--force`.
 
+## Use as a template
+
+Each new plugin or extension gets its own repository made from this one, with the same CLI, CI and release
+pipeline:
+
+1. On GitHub, open this repository and choose **Use this template → Create a new repository**.
+2. In the new repository:
+
+   ```bash
+   npm run init -- --clean          # rename everything after the repo; start with an empty harness/
+   ```
+
+   This renames the CLI (`@<owner>/<repo>`), the tool packages (`@<owner>/<repo>-<tool>`), the bundle,
+   `CODEOWNERS`, `LICENSE` and the README. Override the defaults with `--name`, `--scope @npm-scope`,
+   `--description` or `--author`. Leave out `--clean` to keep the example skills as a starting point.
+3. Write your instructions, skills, commands, agents and MCP servers in `harness/`, then run
+   `npm test && npm run validate`, commit and open a pull request.
+4. Per repository, once: add the `NPM_TOKEN` secret (see [Releasing](#releasing)), and recreate any branch
+   rules. GitHub doesn't copy secrets or rulesets from a template.
+
+The tests use their own fixture harness (`test/fixtures/`), so emptying or rewriting `harness/` doesn't
+break them.
+
 ## Development
 
 ```bash

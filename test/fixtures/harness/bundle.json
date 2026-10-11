@@ -1,0 +1,25 @@
+{
+  "name": "fixture-bundle",
+  "version": "1.2.3",
+  "description": "Fixture harness for tests; independent of the real harness/.",
+  "author": {
+    "name": "fixture"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/example/fixture-bundle",
+  "keywords": [
+    "harness",
+    "skills",
+    "workflow"
+  ],
+  "targets": [
+    "claude",
+    "opencode",
+    "gemini",
+    "pi",
+    "codex"
+  ],
+  "npm": {
+    "scope": "@fixture"
+  }
+}

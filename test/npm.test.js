@@ -6,7 +6,7 @@ import { loadBundle, validateBundle } from '../lib/bundle.js';
 import { npmEntries, npmName, npmRepository } from '../lib/npm.js';
 import { TARGETS } from '../lib/targets/index.js';
 
-const HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'harness');
+const HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness');
 const bundle = await loadBundle(HARNESS);
 const noop = () => {};
 const file = (entries, p) => entries.find((e) => e.path === p);
