@@ -198,8 +198,8 @@ To support another tool, add an adapter in `lib/targets/` (see [docs/targets.md]
 <!-- setup-service -->
 ## Need help setting it up?
 
-I offer a fixed-price setup for teams that use several coding agents: one shared harness, installed into
-every agent, with CI and private packages. See [SETUP-SERVICE.md](SETUP-SERVICE.md).
+I'm setting this up, free, for a few teams that use several coding agents: one shared harness, installed
+into every agent, with CI and private packages. See [SETUP-SERVICE.md](SETUP-SERVICE.md).
 <!-- /setup-service -->
 
 ## License
