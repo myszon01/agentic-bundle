@@ -37,22 +37,6 @@ comments are not merged automatically; the installer prints the keys to add by h
 `~/.claude/skills` and `~/.agents/skills` by default (`OPENCODE_DISABLE_EXTERNAL_SKILLS=1` turns that off),
 so skills installed for other tools can show up twice.
 
-## Gemini CLI (`gemini`)
-
-| harness   | project                           | user (`~/.gemini`) |
-|-----------|-----------------------------------|--------------------|
-| AGENTS.md | `GEMINI.md` (managed block)       | `GEMINI.md`        |
-| skills    | `.gemini/skills/<name>/` (project skills need a trusted folder) | `skills/` |
-| commands  | `.gemini/commands/<name>.toml` (`$ARGUMENTS` → `{{args}}`) | `commands/` |
-| agents    | `.gemini/agents/<name>.md` (`kind: local`; the folder must be trusted) | `agents/` |
-| MCP       | `.gemini/settings.json` → `mcpServers` (`httpUrl` for http, `url` for sse) | `settings.json` |
-
-The package is a Gemini CLI **extension**:
-
-```
-gemini extensions install ./dist/gemini      # or: gemini extensions link ./dist/gemini
-```
-
 ## pi (`pi`)
 
 | harness   | project                       | user (`~/.pi/agent`) |

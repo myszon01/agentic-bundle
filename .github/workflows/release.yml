@@ -28,8 +28,8 @@ jobs:
     outputs:
       list: ${{ steps.list.outputs.list }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
       - run: npm test
@@ -52,13 +52,13 @@ jobs:
       matrix:
         package: ${{ fromJSON(needs.prepare.outputs.list) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           registry-url: https://registry.npmjs.org
       - run: scripts/pack.sh "${{ matrix.package }}" artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.package }}
           path: artifacts/*.tgz

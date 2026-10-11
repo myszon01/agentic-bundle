@@ -49,14 +49,6 @@ test('claude: package is a plugin that injects instructions via a SessionStart h
   assert.ok(find(entries, 'skills/code-review/scripts/changed-files.sh').executable);
 });
 
-test('gemini: commands become TOML with {{args}}', () => {
-  const { entries } = TARGETS.gemini.install(bundle, { scope: 'project', dir: '/p', warn: noop });
-  const toml = text(find(entries, '.gemini/commands/review.toml'));
-  assert.match(toml, /^description = "Review/);
-  assert.match(toml, /review \{\{args\}\}\./);
-  assert.ok(!toml.includes('$ARGUMENTS'));
-});
-
 test('opencode: env references and agent permissions are converted', () => {
   const custom = { ...bundle, mcp: [{ name: 'api', url: 'https://x', headers: { Authorization: 'Bearer ${TOKEN}' } }] };
   const { entries } = TARGETS.opencode.install(custom, { scope: 'project', dir: '/p', warn: noop });
@@ -99,17 +91,25 @@ test('codex: env refs become env_vars / bearer tokens', () => {
 });
 
 test('per-item targets filter restricts output', () => {
-  const custom = { ...bundle, commands: [{ ...bundle.commands[0], meta: { ...bundle.commands[0].meta, targets: ['gemini'] } }] };
+  const custom = { ...bundle, commands: [{ ...bundle.commands[0], meta: { ...bundle.commands[0].meta, targets: ['opencode'] } }] };
   const claude = TARGETS.claude.install(custom, { scope: 'project', dir: '/p', warn: noop }).entries;
-  const gemini = TARGETS.gemini.install(custom, { scope: 'project', dir: '/p', warn: noop }).entries;
+  const opencode = TARGETS.opencode.install(custom, { scope: 'project', dir: '/p', warn: noop }).entries;
   assert.ok(!claude.some((e) => e.path.startsWith('.claude/commands/')));
-  assert.ok(gemini.some((e) => e.path.startsWith('.gemini/commands/')));
+  assert.ok(opencode.some((e) => e.path.startsWith('.opencode/commands/')));
 });
 
 test('resolveTargets honours "all", bundle defaults and rejects unknown ids', () => {
   assert.deepEqual(resolveTargets(['all'], bundle).map((t) => t.id), Object.keys(TARGETS));
   assert.deepEqual(resolveTargets([], bundle).map((t) => t.id), bundle.manifest.targets);
   assert.throws(() => resolveTargets(['nope'], bundle), /Unknown target/);
+});
+
+test('removed targets: named is an error, a bundle default is skipped with a warning', () => {
+  assert.throws(() => resolveTargets(['gemini'], bundle), /Gemini CLI support was removed/);
+  const old = { ...bundle, manifest: { ...bundle.manifest, targets: ['claude', 'gemini'] } };
+  const warnings = [];
+  assert.deepEqual(resolveTargets([], old, (m) => warnings.push(m)).map((t) => t.id), ['claude']);
+  assert.match(warnings[0], /skipping "gemini"/);
 });
 
 test('validation catches common mistakes', () => {

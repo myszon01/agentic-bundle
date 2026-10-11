@@ -1,7 +1,7 @@
 {
   "name": "@myszon01/agentic-bundle",
   "version": "0.1.0",
-  "description": "Write your agentic harness once (instructions, skills, commands, subagents, MCP servers) and ship it to Claude Code, OpenCode, Gemini CLI, pi, Codex and more.",
+  "description": "Write your agentic harness once (instructions, skills, commands, subagents, MCP servers) and ship it to Claude Code, OpenCode, pi, Codex and more.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/myszon01/agentic-bundle.git"
@@ -33,7 +33,6 @@
     "agents",
     "claude-code",
     "opencode",
-    "gemini-cli",
     "pi",
     "codex",
     "skills",
