@@ -109,24 +109,47 @@ scripts/pack.sh gemini artifacts               # one tool → artifacts/*.tgz (o
 ### Releasing
 
 CI builds every package as its own artifact on each pull request (download them from the run's
-*Artifacts* section). To publish:
+*Artifacts* section). `main` only accepts pull requests, so a release is a version-bump PR followed by a tag:
 
 ```bash
-npm version minor            # bumps package.json and harness/bundle.json, commits, tags v0.2.0
-git push --follow-tags       # the Release workflow publishes all six packages to npm
+# 1. Bump the version on a branch and merge it through a pull request
+git switch -c release/v0.2.0 origin/main
+npm version minor --no-git-tag-version     # bumps package.json and harness/bundle.json together
+git commit -am "chore: release v0.2.0"
+git push -u origin release/v0.2.0          # open a PR, get it reviewed, merge it
+
+# 2. Tag the merged commit on main; the tag starts the Release workflow
+git switch main && git pull
+git tag v0.2.0 && git push origin v0.2.0
+
+# 3. When the workflow is done, approve the staged packages (npm asks for your 2FA code)
+npm install -g npm@12                      # staged publishing needs npm 12
+npm login
+npm run approve                            # or: npm run approve -- --dry-run, to only list them
 ```
 
-The release checks that the tag, `package.json` and `bundle.json` versions match, and skips any package
-version that is already on npm, so re-running a release is safe. *Actions → Release → Run workflow*
-does a dry run.
+The Release workflow checks that the tag, `package.json` and `bundle.json` versions match, then packs all
+six packages and **stages** them on npm with `npm stage publish`. Staged packages are uploaded but not
+public: nothing goes live until a maintainer approves it with 2FA, so the CI token never needs publish
+rights. Versions that are already published or staged are skipped, so re-running a release is safe.
+*Actions → Release → Run workflow* does a dry run. The workflow's summary lists every staged package.
+
+The first release (`v0.1.0`) needs no version bump: tag the current `main`.
 
 **One-time npm setup:**
-1. Create the `@myszon01` scope on npmjs.com (it's your npm username, or an org with that name).
-   If the name differs, change `name` in `package.json` and `npm.scope` in `harness/bundle.json`.
-2. Create a granular access token with read/write access to that scope, and add it as the repository
-   secret `NPM_TOKEN` (*Settings → Secrets and variables → Actions*).
+1. Create the `@myszon01` scope on npmjs.com (it's your npm username, or an org with that name), and turn
+   on 2FA for your account; approving staged packages requires it. If the name differs, change `name` in
+   `package.json` and `npm.scope` in `harness/bundle.json` (or run `npm run init`).
+2. Create a granular access token with read/write access to that scope; it does **not** need to bypass
+   2FA. Add it as the repository secret `NPM_TOKEN` (*Settings → Secrets and variables → Actions*).
 3. Optional, after the first release: on npmjs.com, add this repository and `release.yml` as a
-   *Trusted Publisher* for each package. Releases then authenticate via OIDC and the token can be deleted.
+   *Trusted Publisher* for each package, allowing only staged publishing
+   (`npm trust github <package> --file release.yml --repo myszon01/agentic-bundle --allow-stage-publish`).
+   The token can then be deleted.
+
+To publish directly instead of staging (for a token or trusted publisher that is allowed to publish), set
+the repository variable `NPM_PUBLISH_MODE` to `publish` (*Settings → Secrets and variables → Actions →
+Variables*).
 
 ## How install stays safe
 
