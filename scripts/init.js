@@ -129,4 +129,5 @@ console.log(`Initialised ${name}
   code owner:     @${owner}${opts.clean ? '\n  examples:       removed (harness/ is empty)' : ''}
 
 Next: edit harness/, run \`npm test && npm run validate\`, then commit.
-Releases need an NPM_TOKEN secret in this repository (see README → Releasing).`);
+The first release needs an NPM_TOKEN secret in this repository; delete it once you
+switch to npm Trusted Publishing (see README → Releasing).`);

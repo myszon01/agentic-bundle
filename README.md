@@ -84,7 +84,7 @@ If you give none, the `targets` list in `bundle.json` is used.
 
 ## Distributing
 
-Everything is published to npm, so nobody needs access to this repository. A release produces six packages:
+Everything is published to npm, so nobody needs access to this repository. A release produces five packages:
 
 | package | for | install with |
 |---------|-----|--------------|
@@ -92,7 +92,7 @@ Everything is published to npm, so nobody needs access to this repository. A rel
 | `@myszon01/agentic-bundle-claude` | Claude Code plugin | `tar -xzf "$(npm pack @myszon01/agentic-bundle-claude \| tail -1)"`, then `claude plugin marketplace add ./package` |
 | `@myszon01/agentic-bundle-pi` | pi package | `pi install npm:@myszon01/agentic-bundle-pi` |
 | `@myszon01/agentic-bundle-opencode` | OpenCode project files | the CLI, or unpack and copy into a project |
-| `@myszon01/agentic-bundle-codex` | `~/.codex` files | the CLI, or unpack and copy into `~/.codex` |
+| `@myszon01/agentic-bundle-codex` | `~/.codex` files | the CLI, or unpack and copy into `~/.codex` (skills into `~/.agents/skills`) |
 
 Each tool package carries a README with its exact install steps. The CLI is the only route that applies
 every feature for every tool and merges with existing config, so prefer it when in doubt.
@@ -140,9 +140,10 @@ The first release (`v0.1.0`) needs no version bump: tag the current `main`.
 1. Create the `@myszon01` scope on npmjs.com (it's your npm username, or an org with that name), and turn
    on 2FA for your account. If the name differs, change `name` in `package.json` and `npm.scope` in
    `harness/bundle.json` (or run `npm run init`).
-2. For the first release, create a granular access token with read/write access to that scope; it does
+2. **First release only:** create a granular access token with read/write access to that scope; it does
    **not** need to bypass 2FA. Add it as the repository secret `NPM_TOKEN` (*Settings → Secrets and
-   variables → Actions*). The first release is staged; approve it with `npm run approve`.
+   variables → Actions*). The first release is staged; approve it with `npm run approve`. You delete this
+   secret again in step 3.
 3. Then switch to Trusted Publishing: on npmjs.com, for each package, open *Settings → Trusted
    Publisher → GitHub Actions* and enter this repository and `release.yml` (or run
    `npm trust github <package> --file release.yml --repo myszon01/agentic-bundle`). Set the repository
@@ -180,8 +181,9 @@ pipeline:
    `--description` or `--author`. Leave out `--clean` to keep the example skills as a starting point.
 3. Write your instructions, skills, commands, agents and MCP servers in `harness/`, then run
    `npm test && npm run validate`, commit and open a pull request.
-4. Per repository, once: add the `NPM_TOKEN` secret (see [Releasing](#releasing)), and recreate any branch
-   rules. GitHub doesn't copy secrets or rulesets from a template.
+4. Per repository: add the `NPM_TOKEN` secret for the first release only, then delete it once you switch to
+   Trusted Publishing (see [Releasing](#releasing)). Recreate any branch rules too. GitHub doesn't copy
+   secrets or rulesets from a template.
 
 The tests use their own fixture harness (`test/fixtures/`), so emptying or rewriting `harness/` doesn't
 break them.

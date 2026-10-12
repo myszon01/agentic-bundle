@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { loadBundle } from '../lib/bundle.js';
+import { TARGETS, installRoots } from '../lib/targets/index.js';
 import { install, markers, removeBlock, uninstall, upsertBlock } from '../lib/writer.js';
 
 const opts = { bundle: 'demo', target: 't' };
@@ -79,4 +82,40 @@ test('dry run writes nothing', async () => {
 test('refuses paths that escape the root', async () => {
   const root = await tmp();
   await assert.rejects(install([{ type: 'file', path: '../evil', content: 'x' }], root, opts), /outside/);
+});
+
+test('codex user skills installed in ~/.codex/skills by older versions are cleaned up', async () => {
+  const bundle = await loadBundle(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness'));
+  const saved = { home: process.env.AGENTIC_BUNDLE_HOME, codex: process.env.CODEX_HOME };
+  const ctx = { bundle: bundle.name, target: 'codex' };
+  try {
+    for (const action of ['reinstall', 'uninstall']) {
+      const home = await tmp();
+      process.env.AGENTIC_BUNDLE_HOME = home;
+      delete process.env.CODEX_HOME;
+      const groups = installRoots(TARGETS.codex, bundle, { scope: 'user', warn: () => {} });
+      const codexHome = path.join(home, '.codex');
+      assert.deepEqual(groups.map((g) => g.root), [codexHome, home]);
+
+      // What older versions installed: the same files, with skills under ~/.codex/skills.
+      const skills = groups[1].entries.map((e) => ({ ...e, path: e.path.replace(/^\.agents\//, '') }));
+      await install([...groups[0].entries, ...skills], codexHome, ctx);
+      assert.ok(existsSync(path.join(codexHome, 'skills/code-review/SKILL.md')));
+
+      if (action === 'reinstall') {
+        for (const { root, entries } of groups) await install(entries, root, ctx);
+        assert.ok(!existsSync(path.join(codexHome, 'skills')), 'old skills folder is removed');
+        assert.ok(existsSync(path.join(home, '.agents/skills/code-review/SKILL.md')));
+      }
+      for (const { root } of groups) await uninstall(root, ctx);
+      // Only the (now empty) ~/.codex root itself is left: roots are never deleted.
+      assert.deepEqual(await readdir(home), ['.codex'], `${action}: nothing is left behind`);
+      assert.deepEqual(await readdir(codexHome), [], `${action}: nothing is left in ~/.codex`);
+    }
+  } finally {
+    for (const [k, v] of [['AGENTIC_BUNDLE_HOME', saved.home], ['CODEX_HOME', saved.codex]]) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
 });

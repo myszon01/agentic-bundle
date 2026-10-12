@@ -15,6 +15,10 @@ These tools change quickly. If a path drifts, the fix is usually a one-line chan
 | agents        | `.claude/agents/<name>.md`       | `~/.claude/agents/`        | `agents/` |
 | MCP           | `.mcp.json` → `mcpServers`       | `~/.claude.json` → `mcpServers` | `.mcp.json` |
 
+Canonical tool names become `allowed-tools` (commands) and `tools` (agents). Claude Code has no `LS` tool, so
+`list` becomes `Glob`, and `todo` becomes `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate` plus `TodoWrite`
+(off by default since the Task tools replaced it). See [authoring.md](authoring.md#canonical-tool-names).
+
 The package is a Claude Code **plugin** with its own single-plugin `marketplace.json`:
 
 ```
@@ -32,10 +36,14 @@ The package is a Claude Code **plugin** with its own single-plugin `marketplace.
 | agents    | `.opencode/agents/<name>.md` (`mode: subagent`, tools as a `permission` map: `"*": deny` plus the listed tools) | `agents/` |
 | MCP       | `opencode.json` → `mcp` (`local` / `remote`) | `opencode.json` |
 
-The package is the project layout; copy `dist/opencode/.` into a repository. `opencode.jsonc` files with
-comments are not merged automatically; the installer prints the keys to add by hand. OpenCode also loads
-`~/.claude/skills` and `~/.agents/skills` by default (`OPENCODE_DISABLE_EXTERNAL_SKILLS=1` turns that off),
-so skills installed for other tools can show up twice.
+The package is the project layout; copy `dist/opencode/.` into a repository.
+
+MCP servers are merged into `opencode.json` only. If that file isn't plain JSON (for example, it has comments),
+it is left unchanged and the installer prints the keys to add by hand. An `opencode.jsonc` is never read or
+changed: the servers go into an `opencode.json` next to it, and OpenCode loads and merges both files.
+
+OpenCode also loads `~/.claude/skills` and `~/.agents/skills` by default (`OPENCODE_DISABLE_EXTERNAL_SKILLS=1`
+turns that off), so skills installed for other tools can show up twice.
 
 ## pi (`pi`)
 
@@ -60,21 +68,27 @@ pi install ./dist/pi
 | harness   | project                           | user (`~/.codex`, or `$CODEX_HOME`) |
 |-----------|-----------------------------------|-------------------------------------|
 | AGENTS.md | `AGENTS.md` (managed block)       | `AGENTS.md`                         |
-| skills    | `.agents/skills/<name>/`          | `skills/`                           |
+| skills    | `.agents/skills/<name>/`          | `~/.agents/skills/<name>/` (not under `$CODEX_HOME`) |
 | commands  | not available per project (warning) | `prompts/<name>.md` (deprecated by Codex in favour of skills) |
 | agents    | `.codex/agents/<name>.toml` (`developer_instructions`; `tools` dropped, `model` only from a `codex` key) | `agents/` |
 | MCP       | `.codex/config.toml` (managed block) | `config.toml` (managed block)    |
 
 Codex only reads a project's `.codex/config.toml` once that project is **trusted**, either by accepting
 the trust prompt or with `[projects."<path>"] trust_level = "trusted"` in `~/.codex/config.toml`.
-The package mirrors `~/.codex`. Copy it in and append `config.toml` to your existing one.
+The package mirrors `~/.codex`, except that its `skills/` belongs in `~/.agents/skills`. Copy it in and append
+`config.toml` to your existing one.
+
+Codex reads user skills from `~/.agents/skills`; `$CODEX_HOME/skills` (`~/.codex/skills`) still works but is
+deprecated. Earlier versions of agentic-bundle installed user skills there. Installing again moves them, and
+`uninstall` removes them from either place. OpenCode also loads `~/.agents/skills` (see above).
 
 ## Adding a target
 
 1. Create `lib/targets/<id>.js` that exports `{ id, label, supports, install(bundle, ctx), package(bundle, ctx), npmUsage({ name, cli, bundle }) }`.
    `npmUsage` returns the Markdown install steps for the README of the tool's npm package.
    Both functions return entries (`file`, `block` or `json`, see `lib/targets/common.js`). The writer handles
-   merging, manifests and uninstalling.
+   merging, manifests and uninstalling. When a tool reads files from more than one directory, `install` can
+   return a list of `{ root, entries }`; each root gets its own manifest.
 2. Register it in `lib/targets/index.js`, and add tool names to `lib/tools.js` if the tool supports subagents.
 3. Add a test in `test/targets.test.js` and a section to this file. CI and the release workflow pick up the
    new target automatically (`scripts/packages.js`).

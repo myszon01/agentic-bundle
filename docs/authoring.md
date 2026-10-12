@@ -115,10 +115,14 @@ about them.
 | `bash`     | Bash        | bash        | bash   |
 | `grep`     | Grep        | grep        | grep   |
 | `glob`     | Glob        | glob        | find   |
-| `list`     | LS          | list        | ls     |
+| `list`     | Glob ¹      | list        | ls     |
 | `webfetch` | WebFetch    | webfetch    | —      |
 | `websearch`| WebSearch   | websearch   | —      |
-| `todo`     | TodoWrite   | todowrite   | —      |
+| `todo`     | TaskCreate, TaskGet, TaskList, TaskUpdate, TodoWrite ² | todowrite | — |
+
+¹ Claude Code has no `LS` tool; it lists directories with Glob, or `ls` through Bash.
+² Claude Code turns TodoWrite off by default in favour of the four Task tools (`CLAUDE_CODE_ENABLE_TASKS=0`
+brings it back), so both are listed. Claude Code drops the names a session lacks.
 
 Any other name is passed through unchanged (with a validation warning), so you can still use tool-specific
 names such as `mcp__fetch__fetch`, ideally together with `targets:`.

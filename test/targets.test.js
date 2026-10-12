@@ -5,13 +5,24 @@ import { fileURLToPath } from 'node:url';
 import { loadBundle, validateBundle } from '../lib/bundle.js';
 import { parseFrontmatter } from '../lib/frontmatter.js';
 import { mcpToml } from '../lib/targets/codex.js';
-import { TARGETS, resolveTargets } from '../lib/targets/index.js';
+import { TARGETS, installRoots, resolveTargets } from '../lib/targets/index.js';
+import { mapTools } from '../lib/tools.js';
 
 const HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness');
 const bundle = await loadBundle(HARNESS);
 const noop = () => {};
 const find = (entries, p) => entries.find((e) => e.path === p);
 const text = (entry) => entry.content.toString();
+
+function withEnv(vars, fn) {
+  const saved = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, vars);
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+}
 
 test('the fixture harness and your harness/ are valid', async () => {
   assert.deepEqual(validateBundle(bundle).errors, []);
@@ -22,10 +33,12 @@ test('the fixture harness and your harness/ are valid', async () => {
 test('every target installs and packages without throwing', () => {
   for (const target of Object.values(TARGETS)) {
     for (const scope of ['project', 'user']) {
-      const { root, entries } = target.install(bundle, { scope, dir: '/project', warn: noop });
-      assert.ok(root, `${target.id} ${scope} root`);
-      assert.ok(entries.length, `${target.id} ${scope} entries`);
-      for (const e of entries) assert.ok(!path.isAbsolute(e.path) && !e.path.includes('..'), e.path);
+      const groups = installRoots(target, bundle, { scope, dir: '/project', warn: noop });
+      assert.ok(groups.flatMap((g) => g.entries).length, `${target.id} ${scope} entries`);
+      for (const { root, entries } of groups) {
+        assert.ok(path.isAbsolute(root), `${target.id} ${scope} root`);
+        for (const e of entries) assert.ok(!path.isAbsolute(e.path) && !e.path.includes('..'), e.path);
+      }
     }
     assert.ok(target.package(bundle, { warn: noop }).entries.length);
   }
@@ -37,8 +50,15 @@ test('claude: commands and agents get mapped tool names', () => {
   assert.equal(review.data['allowed-tools'], 'Read, Grep, Glob, Bash');
   const agent = parseFrontmatter(text(find(entries, '.claude/agents/researcher.md')));
   assert.equal(agent.data.name, 'researcher');
+  assert.equal(agent.data.tools, 'Read, Grep, Glob', 'list maps to Glob (Claude Code has no LS tool)');
   assert.equal(agent.data.model, 'haiku');
   assert.deepEqual(find(entries, '.mcp.json').value.mcpServers.fetch, { type: 'stdio', command: 'uvx', args: ['mcp-server-fetch'] });
+});
+
+test('claude: todo maps to the Task tools and TodoWrite, never to a missing LS tool', () => {
+  assert.deepEqual(mapTools(['todo', 'read'], 'claude'), ['TaskCreate', 'TaskGet', 'TaskList', 'TaskUpdate', 'TodoWrite', 'Read']);
+  assert.deepEqual(mapTools(['list'], 'claude'), ['Glob']);
+  assert.deepEqual(mapTools(['todo', 'list'], 'opencode'), ['todowrite', 'list']);
 });
 
 test('claude: package is a plugin that injects instructions via a SessionStart hook', () => {
@@ -75,8 +95,15 @@ test('codex: skills go to .agents/skills and agents become TOML files', () => {
   assert.match(agent, /^name = "researcher"\ndescription = "Read-only/);
   assert.match(agent, /developer_instructions = '''\nYou are a read-only research agent/);
   assert.ok(!/^model/m.test(agent), 'claude-only model must not leak into codex');
-  const user = TARGETS.codex.install(bundle, { scope: 'user', dir: '/p', warn: noop }).entries;
-  assert.ok(find(user, 'skills/code-review/SKILL.md') && find(user, 'agents/researcher.toml'));
+  const user = (env) => withEnv(env, () => installRoots(TARGETS.codex, bundle, { scope: 'user', dir: '/p', warn: noop }));
+  const [codexHome, home] = user({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u/.codex' });
+  assert.equal(codexHome.root, '/home/u/.codex');
+  assert.ok(find(codexHome.entries, 'agents/researcher.toml') && !codexHome.entries.some((e) => e.path.startsWith('skills/')));
+  assert.equal(home.root, '/home/u');
+  assert.deepEqual(home.entries.map((e) => e.path).filter((p) => p.endsWith('SKILL.md')).sort(),
+    ['.agents/skills/code-review/SKILL.md', '.agents/skills/conventional-commits/SKILL.md']);
+  // CODEX_HOME set to the home directory itself: one root, so one manifest.
+  assert.equal(user({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u' }).length, 1);
 });
 
 test('codex: env refs become env_vars / bearer tokens', () => {
