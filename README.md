@@ -184,6 +184,7 @@ pipeline:
    This renames the CLI (`@<owner>/<repo>`), the tool packages (`@<owner>/<repo>-<tool>`), the bundle,
    `CODEOWNERS`, `LICENSE` and the README. Override the defaults with `--name`, `--scope @npm-scope`,
    `--description` or `--author`. Leave out `--clean` to keep the example skills as a starting point.
+   If the repository only shares a harness, add `--harness-only` (see below).
 3. Write your instructions, skills, commands, agents and MCP servers in `harness/`, then run
    `npm test && npm run validate`, commit and open a pull request.
 4. Per repository: add the `NPM_TOKEN` secret for the first release only, then delete it once you switch to
@@ -192,6 +193,25 @@ pipeline:
 
 The tests use their own fixture harness (`test/fixtures/`), so emptying or rewriting `harness/` doesn't
 break them.
+
+### Harness-only repos (recommended for teams)
+
+A plain copy of the template carries its own copy of the CLI, so fixes released to npm never reach it. If
+the repository only holds a harness, such as a team's shared instructions and skills, and doesn't publish
+a CLI or packages of its own, make it harness-only:
+
+```bash
+npm run init -- --clean --harness-only   # also converts an existing copy
+npm install                              # then commit package-lock.json (CI runs npm ci)
+```
+
+This keeps `harness/` (renamed as above) and removes the copy of the tool: `lib/`, `bin/`, its tests, the
+packaging scripts and `release.yml`. `package.json` becomes private, with the agentic-bundle CLI from npm
+as a dev dependency at the template's version (`latest` for a copy that was already renamed), so
+`npx agentic-bundle validate` and `install` run the released tool, and updating it is an ordinary
+dependency bump. `ci.yml` is replaced by one that checks just the harness on Linux with Node 24 and 26
+(validate, build and an install round trip, plus `npm test` if you have tests), still behind a single
+`ci-ok` check. Your own files and tests are kept, and re-running init doesn't convert anything twice.
 
 ## Development
 
