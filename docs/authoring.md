@@ -35,6 +35,7 @@ Parse errors name the file and the line, e.g. `harness/agents/x.md: frontmatter:
 | `license`, `homepage`, `repository`, `keywords` | no | Copied into package manifests. |
 | `targets`     | no       | Default target list when none is given on the command line. Unknown ids fail `validate`. |
 | `npm.scope`   | no       | npm scope for the per-tool packages (`build --npm`), e.g. `@acme` → `@acme/<name>-claude`. |
+| `npm.access`  | no       | `"public"` (default) or `"restricted"` (private; needs `npm.scope`). Written to each package's `publishConfig`. See [distribution.md](distribution.md). |
 
 ## AGENTS.md — instructions
 

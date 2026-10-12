@@ -61,3 +61,35 @@ test('an invalid npm scope fails validation', () => {
   const { errors } = validateBundle({ ...bundle, manifest: { ...bundle.manifest, npm: { scope: 'nope' } } });
   assert.ok(errors.some((e) => e.includes('npm.scope')));
 });
+
+test('npm.access defaults to public and "restricted" makes every package private', () => {
+  const restricted = { ...bundle, manifest: { ...bundle.manifest, npm: { ...bundle.manifest.npm, access: 'restricted' } } };
+  for (const id of Object.keys(TARGETS)) {
+    const target = TARGETS[id];
+    const name = npmName(restricted, target);
+    const { entries } = target.package(restricted, { warn: noop, npm: { name } });
+    const out = npmEntries(restricted, target, entries, { name, cli: '@acme/cli' });
+    assert.deepEqual(JSON.parse(file(out, 'package.json').content).publishConfig, { access: 'restricted' }, id);
+    assert.match(file(out, 'README.md').content, /## Install\n\nThis package is private: .*npm login/, `${id}: README says to log in`);
+  }
+  assert.doesNotMatch(file(build('claude').entries, 'README.md').content, /npm login/);
+});
+
+test('a restricted package must be scoped', () => {
+  const restricted = { ...bundle, manifest: { ...bundle.manifest, npm: { access: 'restricted' } } };
+  const target = TARGETS.claude;
+  const name = npmName(restricted, target);
+  const { entries } = target.package(restricted, { warn: noop, npm: { name } });
+  assert.throws(() => npmEntries(restricted, target, entries, { name, cli: '@acme/cli' }), /needs a scoped package name/);
+});
+
+test('npm.access is validated', () => {
+  const errorsFor = (npm) => validateBundle({ ...bundle, manifest: { ...bundle.manifest, npm } }).errors.filter((e) => e.includes('npm.'));
+  assert.deepEqual(errorsFor({ scope: '@fixture' }), []);
+  assert.deepEqual(errorsFor({ scope: '@fixture', access: 'public' }), []);
+  assert.deepEqual(errorsFor({ scope: '@fixture', access: 'restricted' }), []);
+  assert.deepEqual(errorsFor({ access: 'public' }), []);
+  assert.match(errorsFor({ scope: '@fixture', access: 'private' }).join(), /"npm\.access" must be "public" or "restricted", got "private"/);
+  assert.match(errorsFor({ scope: '@fixture', access: true }).join(), /"npm\.access" must be .* got true/);
+  assert.match(errorsFor({ access: 'restricted' }).join(), /"restricted" needs "npm\.scope"/);
+});

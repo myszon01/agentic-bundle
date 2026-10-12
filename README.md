@@ -63,6 +63,7 @@ harness/                 ← the only part you normally edit
 bin/ lib/                the CLI and one adapter per tool (lib/targets/*.js)
 docs/authoring.md        file formats and the canonical tool vocabulary
 docs/targets.md          where everything lands for each tool, and how to add a tool
+docs/distribution.md     public npm, a private npm scope, a private git repo, a private Claude marketplace
 test/                    node:test suite
 ```
 
@@ -84,7 +85,11 @@ If you give none, the `targets` list in `bundle.json` is used.
 
 ## Distributing
 
-Everything is published to npm, so nobody needs access to this repository. A release produces five packages:
+Everything is published to npm, so nobody needs access to this repository. To keep a harness private instead
+(a restricted npm scope, a private git repository with no registry, or a private Claude Code marketplace), see
+[docs/distribution.md](docs/distribution.md).
+
+A release produces five packages:
 
 | package | for | install with |
 |---------|-----|--------------|
