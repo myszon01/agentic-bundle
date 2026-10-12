@@ -125,3 +125,70 @@ test('validation catches common mistakes', () => {
   assert.ok(errors.some((e) => e.includes('"description" is required')));
   assert.ok(errors.some((e) => e.includes('"command"')));
 });
+
+test('validation rejects unknown per-item target ids and lists the known ones', () => {
+  const agent = bundle.agents[0];
+  const custom = {
+    ...bundle,
+    manifest: { ...bundle.manifest, targets: ['claude', 'opencod'] },
+    commands: [{ ...bundle.commands[0], meta: { ...bundle.commands[0].meta, targets: ['claud', 'opencode'] } }],
+    agents: [{ ...agent, meta: { ...agent.meta, targets: 'codx' } }],
+    mcp: [{ name: 'fetch', command: 'uvx', targets: ['claude', 'gemini'] }, { name: 'web', url: 'https://x', targets: ['all'] }],
+  };
+  const { errors, warnings } = validateBundle(custom);
+  const known = `known targets: ${Object.keys(TARGETS).join(', ')}`;
+  assert.ok(errors.includes(`commands/${bundle.commands[0].name}.md: unknown target "claud" in "targets" (${known})`), errors.join('\n'));
+  assert.ok(errors.includes(`agents/${agent.name}.md: unknown target "codx" in "targets" (${known})`));
+  assert.ok(errors.some((e) => e.startsWith('mcp.json: server "web": "all" is not allowed in "targets"')));
+  assert.ok(errors.includes(`bundle.json: unknown target "opencod" in "targets" (${known})`));
+  assert.ok(!errors.some((e) => e.includes('"gemini"')), 'a removed target is a warning, not an error');
+  assert.ok(warnings.some((w) => w.includes('mcp.json: server "fetch": target "gemini" is no longer supported')));
+});
+
+test('model warnings: OpenCode needs provider/model, Codex ignores a plain model string', () => {
+  const agent = { name: 'helper', meta: { description: 'Helps', model: 'sonnet' }, body: 'Help.\n' };
+  const command = { name: 'go', meta: { description: 'Go', model: { default: 'haiku' } }, body: 'Go.\n' };
+  const custom = { ...bundle, agents: [agent], commands: [command] };
+  const collect = (target, ctx = {}) => {
+    const warnings = [];
+    TARGETS[target].install(custom, { scope: 'user', dir: '/p', warn: (w) => warnings.push(w), ...ctx });
+    return warnings;
+  };
+
+  const opencode = collect('opencode');
+  assert.ok(opencode.some((w) => /^OpenCode: agents\/helper\.md: model "sonnet" has no provider prefix/.test(w)), opencode.join('\n'));
+  assert.ok(opencode.some((w) => /^OpenCode: commands\/go\.md: model "haiku"/.test(w)));
+  const codex = collect('codex');
+  assert.ok(codex.some((w) => /^Codex: agents\/helper\.md: model "sonnet" is not used for Codex/.test(w)), codex.join('\n'));
+  assert.deepEqual(collect('claude'), []);
+
+  const fine = { ...custom, agents: [{ ...agent, meta: { ...agent.meta, model: { claude: 'sonnet', opencode: 'anthropic/fake-model-1', codex: 'fake-codex-model' } } }], commands: [] };
+  for (const target of ['opencode', 'codex']) {
+    const warnings = [];
+    TARGETS[target].install(fine, { scope: 'user', dir: '/p', warn: (w) => warnings.push(w) });
+    assert.ok(!warnings.some((w) => w.includes('model')), `${target}: ${warnings.join('\n')}`);
+  }
+});
+
+test('claude: warns about agent frontmatter fields it does not carry over', () => {
+  const agent = {
+    name: 'hooked',
+    meta: {
+      description: 'Has hooks', tools: ['read'], mode: 'subagent', targets: ['claude'], color: 'blue',
+      hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: './check.sh' }] }] },
+    },
+    body: 'Prompt.\n',
+  };
+  const custom = { ...bundle, agents: [agent] };
+  for (const run of [
+    (warn) => TARGETS.claude.install(custom, { scope: 'project', dir: '/p', warn }),
+    (warn) => TARGETS.claude.package(custom, { warn }),
+  ]) {
+    const warnings = [];
+    const { entries } = run((w) => warnings.push(w));
+    assert.equal(warnings.length, 1, warnings.join('\n'));
+    assert.match(warnings[0], /^Claude Code: agents\/hooked\.md: "color", "hooks" not written/);
+    const file = entries.find((e) => e.path.endsWith('agents/hooked.md'));
+    assert.deepEqual(Object.keys(parseFrontmatter(text(file)).data), ['name', 'description', 'tools']);
+  }
+});

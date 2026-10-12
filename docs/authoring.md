@@ -12,7 +12,17 @@ harness/
 └── mcp.json              # MCP servers
 ```
 
-To keep the harness somewhere else (for example in a dotfiles repo), pass `--source <dir>`.
+To keep the harness somewhere else (for example in a dotfiles repo), pass `--source <dir>`. Without
+`--source` and without `./harness/bundle.json` in the current directory, the CLI uses the harness bundled
+with the package (that is how `npx <package> install` works) and prints which one it is using.
+
+## Frontmatter
+
+Skills, commands and agents start with YAML frontmatter. agentic-bundle reads the subset agent tools use:
+plain, quoted and multi-line strings (continuation lines indented more than the key), inline and block
+lists, block lists of maps (for example Claude Code `hooks:`), nested maps and block scalars (`|`, `>`).
+Anchors, tags and multi-document files are not supported. A leading UTF-8 byte order mark is ignored.
+Parse errors name the file and the line, e.g. `harness/agents/x.md: frontmatter: cannot parse line 4: …`.
 
 ## bundle.json
 
@@ -23,7 +33,7 @@ To keep the harness somewhere else (for example in a dotfiles repo), pass `--sou
 | `description` | no       | Shown in plugin/extension listings. |
 | `author`      | no       | `{ "name", "email", "url" }`. |
 | `license`, `homepage`, `repository`, `keywords` | no | Copied into package manifests. |
-| `targets`     | no       | Default target list when none is given on the command line. |
+| `targets`     | no       | Default target list when none is given on the command line. Unknown ids fail `validate`. |
 | `npm.scope`   | no       | npm scope for the per-tool packages (`build --npm`), e.g. `@acme` → `@acme/<name>-claude`. |
 
 ## AGENTS.md — instructions
@@ -64,6 +74,15 @@ Review $ARGUMENTS using the code-review skill.
 
 Write `$ARGUMENTS` for the user's arguments; it is rewritten where a tool needs it.
 
+`targets` (on commands, agents and MCP servers) may only name known targets (`claude`, `opencode`, `pi`,
+`codex`); `validate` rejects anything else, since a typo would silently drop the item. A removed target
+(such as `gemini`) is a warning.
+
+Model ids are tool-specific. A plain string (`model: sonnet`) is written as-is for Claude Code and
+OpenCode and ignored for Codex. OpenCode expects `provider/model-id`, so `build` and `install` warn when
+an OpenCode model has no provider prefix, and when Codex ignores a plain string. Use a per-target map
+(`model: { claude: sonnet, opencode: anthropic/<model-id>, codex: <model-id> }`; `default` is the fallback).
+
 ## Agents
 
 `agents/<name>.md` becomes a subagent where the tool supports them.
@@ -81,6 +100,10 @@ targets: [claude, opencode]                     # optional
 
 System prompt for the agent…
 ```
+
+The Claude Code subagent file gets `name`, `description`, `tools` and `model` only. Other fields, such as
+Claude Code's `hooks`, `color` or `permissionMode`, are not carried over, and `build` / `install` warn
+about them.
 
 ## Canonical tool names
 
