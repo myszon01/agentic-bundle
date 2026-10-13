@@ -144,9 +144,28 @@ test('lists of maps are emitted as block YAML and round-trip', () => {
 test('parse errors give the line number in the file', () => {
   const cases = [
     ['---\ndescription: "closed"\n    extra: 1\n---\n', /unexpected indentation on line 3/],
+    // A more-indented "key: value" is a typo, not the continuation of a plain scalar.
+    ['---\nmodel:\n  claude: haiku\n   opencode: anthropic/x\n---\n', /unexpected indentation on line 4/],
+    ['---\ndescription: Do X\n  when: Y # note\n---\n', /unexpected indentation on line 3/],
+    ['---\nnotes:\n  - first\n    key: v\n---\n', /unexpected indentation on line 4/],
     ['---\na: b\njust text\n---\n', /cannot parse line 3: just text/],
     ['---\na: x\nb: "never closed\n  more\n---\n', /unterminated string starting on line 3/],
     ['---\na: "bad \\q escape"\n---\n', /invalid escape .* \(line 2\)/],
   ];
   for (const [text, error] of cases) assert.throws(() => parseFrontmatter(text), error);
+});
+
+test('continuation lines that look like map entries are fine in flow collections and comments', () => {
+  const { data } = parseFrontmatter(`---
+tools: {a: 1,
+  b: 2}
+list: [read,
+  grep]
+dash: Do X
+  - foo
+commented: Do Y
+  more # see: docs
+---
+`);
+  assert.deepEqual(data, { tools: { a: 1, b: 2 }, list: ['read', 'grep'], dash: 'Do X - foo', commented: 'Do Y more' });
 });

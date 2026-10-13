@@ -99,11 +99,12 @@ test('codex: skills go to .agents/skills and agents become TOML files', () => {
   const [codexHome, home] = user({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u/.codex' });
   assert.equal(codexHome.root, '/home/u/.codex');
   assert.ok(find(codexHome.entries, 'agents/researcher.toml') && !codexHome.entries.some((e) => e.path.startsWith('skills/')));
-  assert.equal(home.root, '/home/u');
+  // Not ~ itself: a manifest there belongs to a project install run in the home directory.
+  assert.equal(home.root, '/home/u/.agents');
   assert.deepEqual(home.entries.map((e) => e.path).filter((p) => p.endsWith('SKILL.md')).sort(),
-    ['.agents/skills/code-review/SKILL.md', '.agents/skills/conventional-commits/SKILL.md']);
-  // CODEX_HOME set to the home directory itself: one root, so one manifest.
-  assert.equal(user({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u' }).length, 1);
+    ['skills/code-review/SKILL.md', 'skills/conventional-commits/SKILL.md']);
+  // CODEX_HOME set to the skills root: one root, so one manifest.
+  assert.equal(user({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u/.agents' }).length, 1);
 });
 
 test('codex: env refs become env_vars / bearer tokens', () => {
@@ -115,6 +116,22 @@ test('codex: env refs become env_vars / bearer tokens', () => {
   assert.match(toml, /\[mcp_servers\.local\.env\]\nMODE = "fast"/);
   assert.match(toml, /\[mcp_servers\."remote\.api"\]\nurl = "https:\/\/x"\nbearer_token_env_var = "TOKEN"/);
   assert.match(toml, /env_http_headers\]\nX-Org = "ORG"/);
+});
+
+test('codex: warns about env references it would write literally', () => {
+  const warnings = [];
+  mcpToml([
+    { name: 'local', command: '${BIN_DIR}/srv', args: ['--token', '${TOKEN}', '--org=${ORG}', '${TOKEN}'], cwd: '${HOME}/x', env: { API_KEY: '${API_KEY}' } },
+    { name: 'remote', url: 'https://x/${ORG}/mcp', headers: { Authorization: 'Bearer ${TOKEN}', 'X-Org': '${ORG}' } },
+    { name: 'clean', command: 'srv', args: ['--x'], env: { MODE: 'fast' } },
+  ], (w) => warnings.push(w));
+  const tail = (via) => `which Codex does not expand, so it is written literally; pass the value ${via}, or leave codex out of the server's "targets"`;
+  assert.deepEqual(warnings, [
+    `Codex: "command" of MCP server "local" uses \${BIN_DIR}, ${tail('through "env"')}`,
+    `Codex: "args" of MCP server "local" uses \${TOKEN}, \${ORG}, ${tail('through "env"')}`,
+    `Codex: "cwd" of MCP server "local" uses \${HOME}, ${tail('through "env"')}`,
+    `Codex: "url" of MCP server "remote" uses \${ORG}, ${tail('in a header whose whole value is ${VAR}')}`,
+  ]);
 });
 
 test('per-item targets filter restricts output', () => {
@@ -172,7 +189,7 @@ test('validation rejects unknown per-item target ids and lists the known ones', 
   assert.ok(warnings.some((w) => w.includes('mcp.json: server "fetch": target "gemini" is no longer supported')));
 });
 
-test('model warnings: OpenCode needs provider/model, Codex ignores a plain model string', () => {
+test('model warnings: OpenCode needs provider/model, Codex ignores a plain model string and command models', () => {
   const agent = { name: 'helper', meta: { description: 'Helps', model: 'sonnet' }, body: 'Help.\n' };
   const command = { name: 'go', meta: { description: 'Go', model: { default: 'haiku' } }, body: 'Go.\n' };
   const custom = { ...bundle, agents: [agent], commands: [command] };
@@ -187,9 +204,19 @@ test('model warnings: OpenCode needs provider/model, Codex ignores a plain model
   assert.ok(opencode.some((w) => /^OpenCode: commands\/go\.md: model "haiku"/.test(w)));
   const codex = collect('codex');
   assert.ok(codex.some((w) => /^Codex: agents\/helper\.md: model "sonnet" is not used for Codex/.test(w)), codex.join('\n'));
+  // Codex custom prompts have no model field at all: one warning per command, at install and at build.
+  const dropped = 'Codex: commands/go.md: model is dropped (Codex custom prompts have no model field)';
+  assert.equal(codex.filter((w) => w === dropped).length, 1, codex.join('\n'));
+  const built = [];
+  TARGETS.codex.package(custom, { warn: (w) => built.push(w) });
+  assert.ok(built.includes(dropped), built.join('\n'));
   assert.deepEqual(collect('claude'), []);
 
-  const fine = { ...custom, agents: [{ ...agent, meta: { ...agent.meta, model: { claude: 'sonnet', opencode: 'anthropic/fake-model-1', codex: 'fake-codex-model' } } }], commands: [] };
+  const fine = {
+    ...custom,
+    agents: [{ ...agent, meta: { ...agent.meta, model: { claude: 'sonnet', opencode: 'anthropic/fake-model-1', codex: 'fake-codex-model' } } }],
+    commands: [{ ...command, meta: { ...command.meta, model: { claude: 'sonnet', opencode: 'anthropic/fake-model-1' } } }],
+  };
   for (const target of ['opencode', 'codex']) {
     const warnings = [];
     TARGETS[target].install(fine, { scope: 'user', dir: '/p', warn: (w) => warnings.push(w) });

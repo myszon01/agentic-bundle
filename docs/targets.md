@@ -69,7 +69,7 @@ pi install ./dist/pi
 |-----------|-----------------------------------|-------------------------------------|
 | AGENTS.md | `AGENTS.md` (managed block)       | `AGENTS.md`                         |
 | skills    | `.agents/skills/<name>/`          | `~/.agents/skills/<name>/` (not under `$CODEX_HOME`) |
-| commands  | not available per project (warning) | `prompts/<name>.md` (deprecated by Codex in favour of skills) |
+| commands  | not available per project (warning) | `prompts/<name>.md` (deprecated by Codex in favour of skills; `model` dropped with a warning) |
 | agents    | `.codex/agents/<name>.toml` (`developer_instructions`; `tools` dropped, `model` only from a `codex` key) | `agents/` |
 | MCP       | `.codex/config.toml` (managed block) | `config.toml` (managed block)    |
 
@@ -80,7 +80,14 @@ The package mirrors `~/.codex`, except that its `skills/` belongs in `~/.agents/
 
 Codex reads user skills from `~/.agents/skills`; `$CODEX_HOME/skills` (`~/.codex/skills`) still works but is
 deprecated. Earlier versions of agentic-bundle installed user skills there. Installing again moves them, and
-`uninstall` removes them from either place. OpenCode also loads `~/.agents/skills` (see above).
+`uninstall` removes them from either place. User skills keep their own manifest in `~/.agents/.agentic-bundle/`,
+apart from the one a project install run in your home directory keeps in `~/.agentic-bundle/`. OpenCode also
+loads `~/.agents/skills` (see above).
+
+Codex expands `${VAR}` only through `env_vars`, `env_http_headers` and `bearer_token_env_var`. A reference in an
+MCP server's `command`, `args`, `url` or `cwd` is written as literal text, so `build` and `install` warn about it.
+Codex also reads only the first 32 KiB of `AGENTS.md` by default (`project_doc_max_bytes`); `validate` warns
+when the harness's `AGENTS.md` is longer.
 
 ## Adding a target
 

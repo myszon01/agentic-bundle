@@ -95,11 +95,10 @@ test('codex user skills installed in ~/.codex/skills by older versions are clean
       delete process.env.CODEX_HOME;
       const groups = installRoots(TARGETS.codex, bundle, { scope: 'user', warn: () => {} });
       const codexHome = path.join(home, '.codex');
-      assert.deepEqual(groups.map((g) => g.root), [codexHome, home]);
+      assert.deepEqual(groups.map((g) => g.root), [codexHome, path.join(home, '.agents')]);
 
       // What older versions installed: the same files, with skills under ~/.codex/skills.
-      const skills = groups[1].entries.map((e) => ({ ...e, path: e.path.replace(/^\.agents\//, '') }));
-      await install([...groups[0].entries, ...skills], codexHome, ctx);
+      await install([...groups[0].entries, ...groups[1].entries], codexHome, ctx);
       assert.ok(existsSync(path.join(codexHome, 'skills/code-review/SKILL.md')));
 
       if (action === 'reinstall') {
@@ -108,10 +107,45 @@ test('codex user skills installed in ~/.codex/skills by older versions are clean
         assert.ok(existsSync(path.join(home, '.agents/skills/code-review/SKILL.md')));
       }
       for (const { root } of groups) await uninstall(root, ctx);
-      // Only the (now empty) ~/.codex root itself is left: roots are never deleted.
-      assert.deepEqual(await readdir(home), ['.codex'], `${action}: nothing is left behind`);
-      assert.deepEqual(await readdir(codexHome), [], `${action}: nothing is left in ~/.codex`);
+      // Only the (now empty) roots themselves are left: roots are never deleted.
+      const left = (await readdir(home)).sort();
+      assert.deepEqual(left, action === 'reinstall' ? ['.agents', '.codex'] : ['.codex'], `${action}: nothing else is left behind`);
+      for (const dir of left) assert.deepEqual(await readdir(path.join(home, dir)), [], `${action}: nothing is left in ~/${dir}`);
     }
+  } finally {
+    for (const [k, v] of [['AGENTIC_BUNDLE_HOME', saved.home], ['CODEX_HOME', saved.codex]]) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+});
+
+test('codex: the user install never shares a manifest with a project install run in ~', async () => {
+  const bundle = await loadBundle(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness'));
+  const saved = { home: process.env.AGENTIC_BUNDLE_HOME, codex: process.env.CODEX_HOME };
+  const ctx = { bundle: bundle.name, target: 'codex' };
+  const groups = (scope, dir) => installRoots(TARGETS.codex, bundle, { scope, dir, warn: () => {} });
+  const manifest = (root) => path.join(root, '.agentic-bundle', `${bundle.name}.codex.json`);
+  try {
+    delete process.env.CODEX_HOME;
+
+    // `install codex` in ~, then `install codex --scope user`: the project's agents and MCP block stay.
+    let home = await tmp();
+    process.env.AGENTIC_BUNDLE_HOME = home;
+    for (const { root, entries } of groups('project', home)) await install(entries, root, ctx);
+    const project = await readFile(manifest(home), 'utf8');
+    for (const { root, entries } of groups('user')) await install(entries, root, ctx);
+    assert.equal(await readFile(manifest(home), 'utf8'), project, 'project manifest is untouched');
+    assert.ok(existsSync(path.join(home, '.codex/agents/researcher.toml')));
+    assert.match(await read(home, '.codex/config.toml'), /\[mcp_servers\.fetch\]/);
+
+    // `install codex --scope user`, then `uninstall codex` in ~: there is no project install to remove.
+    home = await tmp();
+    process.env.AGENTIC_BUNDLE_HOME = home;
+    for (const { root, entries } of groups('user')) await install(entries, root, ctx);
+    assert.ok(existsSync(manifest(path.join(home, '.agents'))), 'user skills have their own manifest in ~/.agents');
+    for (const { root } of groups('project', home)) assert.equal(await uninstall(root, ctx), false);
+    assert.ok(existsSync(path.join(home, '.agents/skills/code-review/SKILL.md')));
   } finally {
     for (const [k, v] of [['AGENTIC_BUNDLE_HOME', saved.home], ['CODEX_HOME', saved.codex]]) {
       if (v === undefined) delete process.env[k];
