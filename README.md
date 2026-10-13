@@ -189,10 +189,12 @@ pipeline:
    `--description` or `--author`. Leave out `--clean` to keep the example skills as a starting point.
    If the repository only shares a harness, add `--harness-only` (see below).
 3. Write your instructions, skills, commands, agents and MCP servers in `harness/`, then run
-   `npm test && npm run validate`, commit and open a pull request.
+   `npm test && npm run validate`, commit and open a pull request. A harness-only repository gets the tool
+   from npm, so run `npm install` first (and commit `package-lock.json`), then `npm run validate`; it has no
+   `npm test` until you add tests of your own.
 4. Per repository: add the `NPM_TOKEN` secret for the first release only, then delete it once you switch to
-   Trusted Publishing (see [Releasing](#releasing)). Recreate any branch rules too. GitHub doesn't copy
-   secrets or rulesets from a template.
+   Trusted Publishing (see [Releasing](#releasing)). A harness-only repository publishes nothing and needs no
+   npm token. Recreate any branch rules too. GitHub doesn't copy secrets or rulesets from a template.
 
 The tests use their own fixture harness (`test/fixtures/`), so emptying or rewriting `harness/` doesn't
 break them.
@@ -204,17 +206,29 @@ the repository only holds a harness, such as a team's shared instructions and sk
 a CLI or packages of its own, make it harness-only:
 
 ```bash
-npm run init -- --clean --harness-only   # also converts an existing copy
+npm run init -- --clean --harness-only   # a fresh copy: rename it, empty harness/, remove the tool
 npm install                              # then commit package-lock.json (CI runs npm ci)
 ```
 
-This keeps `harness/` (renamed as above) and removes the copy of the tool: `lib/`, `bin/`, its tests, the
-packaging scripts and `release.yml`. `package.json` becomes private, with the agentic-bundle CLI from npm
-as a dev dependency at the template's version (`latest` for a copy that was already renamed), so
-`npx agentic-bundle validate` and `install` run the released tool, and updating it is an ordinary
-dependency bump. `ci.yml` is replaced by one that checks just the harness on Linux with Node 24 and 26
-(validate, build and an install round trip, plus `npm test` if you have tests), still behind a single
-`ci-ok` check. Your own files and tests are kept, and re-running init doesn't convert anything twice.
+To convert a copy that was already initialised, leave out `--clean`, which would empty its `harness/` (init
+refuses the combination there):
+
+```bash
+npm run init -- --harness-only           # an existing copy: keeps harness/ and your own files
+npm install
+```
+
+This keeps `harness/` (renamed as above) and removes the copy of the tool: `lib/`, `bin/`, its tests and
+docs, its contributor notes in `CLAUDE.md`, the packaging scripts and `release.yml`. `package.json` becomes
+private, with the agentic-bundle CLI from npm as a dev dependency at the template's version (`latest` for a
+copy that was already renamed), and loses the scripts that build npm packages. Then
+`npx @myszon01/agentic-bundle validate` and `install` run the released tool, the installed dev dependency
+(always use the scoped name: the unscoped `agentic-bundle` on npm is not this tool), and updating it is an
+ordinary dependency bump. `ci.yml` is replaced by one that checks just the harness on Linux with Node 24
+and 26 (validate, build and an install round trip, plus `npm test` if you have tests), still behind a
+single `ci-ok` check. Your own files and tests are kept, and re-running init doesn't convert anything
+twice. An existing copy keeps its README too, in case you edited it; init warns when it still documents
+the removed CLI, so you can replace it.
 
 ## Development
 

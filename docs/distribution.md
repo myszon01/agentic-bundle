@@ -38,16 +38,18 @@ Set the scope and the access level in `harness/bundle.json`:
 
 `build --npm` then writes `"publishConfig": { "access": "restricted" }` into each tool's `package.json`, and
 each package README tells the reader to log in to npm first. `validate` accepts only `"public"` or
-`"restricted"` for `npm.access`, and rejects `"restricted"` when `npm.scope` is missing.
+`"restricted"` for `npm.access`. npm can't restrict a package without a scope, so for `"restricted"`,
+`build --npm` fails unless a scope is set, in `npm.scope` or with `--npm-scope`.
 
 The CLI package is published from the repository's own `package.json`, and it contains the harness too, so
-set `"publishConfig": { "access": "restricted" }` there as well.
+set `"publishConfig": { "access": "restricted" }` there as well. `scripts/pack.sh cli`, which CI and the
+Release workflow use to pack it, refuses to pack a public CLI package around a restricted harness.
 
-> **Don't use the Release workflow unchanged for a private scope.** `.github/workflows/release.yml` passes
-> `--access public` on the command line. npm gives command-line flags priority over `publishConfig`, and
-> passing `public` also makes an existing restricted package public. The workflow would therefore make
-> every package public, whatever `npm.access` says. Until the workflow reads the access level from each
-> package, either publish by hand, or change your copy of the workflow so it doesn't pass `--access public`.
+The Release workflow doesn't pass `--access`, so each package is published with the `publishConfig.access`
+it carries: the root `package.json` for the CLI, `npm.access` for the tool packages. (npm gives a
+command-line `--access` priority over `publishConfig`, and `--access public` also makes an existing
+restricted package public.) A copy made from the template before v0.2.1 may still pass `--access public`
+in `.github/workflows/release.yml` and `ci.yml`: remove it there before you release to a private scope.
 
 Publishing by hand, with 2FA:
 
@@ -88,8 +90,12 @@ npx -y @myszon01/agentic-bundle install claude codex --source ~/src/acme-harness
   `--dir ~/code/my-project`.
 - Only the CLI is downloaded from npm. Your harness never leaves your git host. To keep every developer on the
   same CLI version, pin it: `npx -y @myszon01/agentic-bundle@0.2.0 ...`.
-- A repository made from this template already contains the CLI, so npm isn't needed at all. From the
-  checkout root, `node bin/agentic-bundle.js install claude codex --scope user` uses `./harness`.
+- A plain copy of this template already contains the CLI, so npm isn't needed at all. From the checkout
+  root, `node bin/agentic-bundle.js install claude codex --scope user` uses `./harness`.
+- A [harness-only](../README.md#harness-only-repos-recommended-for-teams) repository has the CLI as a dev
+  dependency instead. From the checkout root, run `npm ci` once, then
+  `npx @myszon01/agentic-bundle install claude codex --scope user`, which uses `./harness` and the CLI
+  version in `package-lock.json` (`npm run validate` checks the harness).
 
 To update, run `git pull`, then the same install command. A re-install updates files in place and removes
 anything that was deleted from the harness. To remove everything, run the same command with `uninstall`
@@ -112,6 +118,9 @@ git -C ../acme-harness-claude add -A
 git -C ../acme-harness-claude commit -m "acme-harness v1.4.0"
 git -C ../acme-harness-claude push
 ```
+
+In a harness-only repository, run `npm ci`, then replace the first line with
+`npx @myszon01/agentic-bundle build claude --out dist`.
 
 A dedicated branch of the harness repository works as well: users add it as `acme/acme-harness#claude-plugin`.
 

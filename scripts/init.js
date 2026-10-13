@@ -6,9 +6,10 @@
 // Defaults come from `git remote get-url origin`: name = repo name, scope = @owner.
 // --clean also removes the example skills, commands, agents and MCP servers.
 // --harness-only (recommended for teams) keeps the harness but not the tool: lib/, bin/, the tool's
-//   tests, its packaging scripts and release.yml are removed, package.json becomes private and gets the
-//   tool from npm as a dev dependency, and CI checks just the harness. Then run `npm install` and commit
-//   package-lock.json. It converts an existing copy too, keeping your own files and tests.
+//   tests, docs and CLAUDE.md, its packaging scripts and release.yml are removed, package.json becomes
+//   private and gets the tool from npm as a dev dependency, and CI checks just the harness. Then run
+//   `npm install` and commit package-lock.json. It converts an existing copy too, keeping your own files
+//   and tests; there it refuses --clean, which would empty harness/.
 // Safe to re-run: current names are read from package.json and harness/bundle.json.
 
 import { execFileSync } from 'node:child_process';
@@ -21,8 +22,13 @@ const FLAGS = new Set(['clean', 'harness-only']);
 
 // --harness-only: the CLI as published on npm, and the parts of the template that are the tool itself.
 const TOOL = '@myszon01/agentic-bundle';
+// The scoped name: npx runs the installed dev dependency, or else the real package, never a look-alike.
+const NPX = `npx ${TOOL}`;
 const TOOL_SCRIPTS = ['scripts/pack.sh', 'scripts/approve.js', 'scripts/packages.js', 'scripts/sync-version.js'];
-const TOOL_FILES = ['lib', ...TOOL_SCRIPTS, '.github/workflows/release.yml'];
+const TOOL_DOCS = ['docs/authoring.md', 'docs/targets.md', 'docs/distribution.md'];
+const TOOL_FILES = ['lib', ...TOOL_SCRIPTS, ...TOOL_DOCS, '.github/workflows/release.yml'];
+// The first line of the tool's contributor notes; a CLAUDE.md of your own is kept.
+const TOOL_CLAUDE_MD = '# agentic-bundle — contributor notes';
 const HARNESS_CI = `name: CI
 
 on:
@@ -44,13 +50,13 @@ jobs:
           node-version: \${{ matrix.node }}
       - run: npm ci
       - run: npm run test --if-present
-      - run: npx agentic-bundle validate
-      - run: npx agentic-bundle build all
+      - run: ${NPX} validate
+      - run: ${NPX} build all
       - name: Install round trip
         run: |
           dir=$(mktemp -d)
-          npx agentic-bundle install all --dir "$dir"
-          npx agentic-bundle uninstall all --dir "$dir"
+          ${NPX} install all --dir "$dir"
+          ${NPX} uninstall all --dir "$dir"
           test -z "$(ls -A "$dir")"
 
   # Single stable check for branch protection, so the required check
@@ -116,7 +122,9 @@ function harnessPackage(pkg, toolRange, vendored) {
   const { bin, files, publishConfig, private: _, ...rest } = pkg;
   const scripts = {};
   for (const [key, cmd] of Object.entries(rest.scripts ?? {})) {
-    if (!TOOL_SCRIPTS.some((f) => cmd.includes(f))) scripts[key] = cmd.replaceAll('node bin/agentic-bundle.js', 'agentic-bundle');
+    // npm builds (--npm) go too: their READMEs would install the tool's example harness, not this one.
+    if (TOOL_SCRIPTS.some((f) => cmd.includes(f)) || cmd.includes('--npm')) continue;
+    scripts[key] = cmd.replaceAll('node bin/agentic-bundle.js', 'agentic-bundle');
   }
   scripts.validate = 'agentic-bundle validate';
   // `npm test` only while tests of your own remain.
@@ -130,16 +138,18 @@ const harnessReadme = (name, description) => `# ${name}
 ${description ?? 'Shared instructions, skills, commands, subagents and MCP servers for coding agents.'}
 
 Everything lives in \`harness/\`. [agentic-bundle](https://www.npmjs.com/package/${TOOL}), a dev dependency,
-checks it and installs it into each coding agent it supports (\`npx agentic-bundle targets\`):
+checks it and installs it into each coding agent it supports (\`${NPX} targets\`):
 
 \`\`\`bash
 npm ci
-npx agentic-bundle validate
-npx agentic-bundle install all --dir ~/code/my-project     # or --scope user
-npx agentic-bundle uninstall all --dir ~/code/my-project
+${NPX} validate
+${NPX} install all --dir ~/code/my-project     # or --scope user
+${NPX} uninstall all --dir ~/code/my-project
 \`\`\`
 
-File formats: \`node_modules/${TOOL}/docs/authoring.md\`. Update the tool with \`npm install -D ${TOOL}@latest\`.
+File formats: \`node_modules/${TOOL}/docs/authoring.md\`. Other ways to share the harness, such as a
+Claude Code marketplace: \`node_modules/${TOOL}/docs/distribution.md\`.
+Update the tool with \`npm install -D ${TOOL}@latest\`.
 `;
 
 const opts = parseArgs(process.argv.slice(2));
@@ -151,6 +161,14 @@ const harnessRepo = harnessOnly || (pkg.private === true && Boolean(pkg.devDepen
 // The tool is still copied in: a fresh template copy, or a copy not converted yet.
 const vendored = existsSync('bin/agentic-bundle.js');
 const templateReadme = existsSync('README.md') && readFileSync('README.md', 'utf8').includes('<!-- setup-service -->');
+// A fresh copy's package.json is the tool's own; init renames it.
+const fresh = pkg.name === TOOL;
+
+if (harnessOnly && opts.clean && !fresh) {
+  console.error('This copy was already initialised, and --clean would empty its harness/. '
+    + 'To convert it and keep harness/, run init --harness-only without --clean.');
+  process.exit(1);
+}
 
 const repo = opts.repo ?? originRepo();
 if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
@@ -172,11 +190,13 @@ const old = {
 };
 const url = `https://github.com/${owner}/${repoName}`;
 const cli = `${scope}/${name}`;
-// A fresh copy's package.json is the tool's own. Re-runs keep the range; other copies get the newest.
-const toolRange = pkg.devDependencies?.[TOOL] ?? (pkg.name === TOOL ? `^${pkg.version}` : 'latest');
+// A fresh copy gets the template's version. Re-runs keep the range; other copies get the newest.
+const toolRange = pkg.devDependencies?.[TOOL] ?? (fresh ? `^${pkg.version}` : 'latest');
 
 if (harnessOnly && vendored) {
   for (const f of TOOL_FILES) rmSync(f, { recursive: true, force: true });
+  removeIfEmpty('docs');
+  if (existsSync('CLAUDE.md') && readFileSync('CLAUDE.md', 'utf8').split(/\r?\n/)[0] === TOOL_CLAUDE_MD) rmSync('CLAUDE.md');
   removeToolTests();
   mkdirSync('.github/workflows', { recursive: true });
   writeFileSync('.github/workflows/ci.yml', HARNESS_CI);
@@ -189,7 +209,7 @@ Object.assign(pkg, {
   name: cli,
   version: '0.1.0',
   // The template's description is the tool's; a harness-only repository describes its harness.
-  ...(harnessOnly && pkg.name === TOOL && { description: bundle.description }),
+  ...(harnessOnly && fresh && { description: bundle.description }),
   ...(opts.description && { description: opts.description }),
   repository: { type: 'git', url: `git+${url}.git` },
   homepage: `${url}#readme`,
@@ -232,6 +252,8 @@ if (existsSync('README.md')) {
   const readme = readFileSync('README.md', 'utf8').replace(/<!-- setup-service -->[\s\S]*?<!-- \/setup-service -->\n\n?/, '');
   writeFileSync('README.md', readme);
 }
+// A README you may have edited is kept, even when it still documents the copy of the tool that is gone.
+const staleReadme = harnessRepo && existsSync('README.md') && readFileSync('README.md', 'utf8').includes('bin/agentic-bundle.js');
 
 if (opts.clean) {
   for (const dir of ['skills', 'commands', 'agents']) {
@@ -249,7 +271,7 @@ const packages = harnessRepo
   : `  CLI package:    ${cli}\n  tool packages:  ${scope}/${name}-<tool>`;
 const next = harnessRepo
   ? `Next: run \`npm install\` and commit package-lock.json (CI runs \`npm ci\`).
-Then edit harness/, run \`npx agentic-bundle validate\`, and commit.`
+Then edit harness/, run \`${NPX} validate\`, and commit.`
   : `Next: edit harness/, run \`npm test && npm run validate\`, then commit.
 The first release needs an NPM_TOKEN secret in this repository; delete it once you
 switch to npm Trusted Publishing (see README → Releasing).`;
@@ -260,3 +282,10 @@ ${packages}
   code owner:     @${owner}${opts.clean ? '\n  examples:       removed (harness/ is empty)' : ''}
 
 ${next}`);
+if (staleReadme) {
+  console.warn(`
+Warning: README.md still documents the CLI and release flow this repository no longer has
+(node bin/agentic-bundle.js, scripts/pack.sh, npm run approve, the tool's tests and its npm packages).
+It was kept in case you edited it; replace it with how to use this harness: \`npm ci\`, then
+\`${NPX} validate\` and \`${NPX} install all --dir <project>\` (or --scope user).`);
+}
