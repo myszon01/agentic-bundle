@@ -166,8 +166,11 @@ Things Trusted Publishing can't do, such as `npm deprecate`, are done by hand wi
   Everything else in those files is left untouched.
 - **Every write is recorded** in `.agentic-bundle/<bundle>.<target>.json`. Re-installing updates in place
   and removes anything you deleted from the harness. `uninstall` removes exactly what was added.
-- **Foreign files are never clobbered.** If a skill, command or agent file already exists and this bundle
-  did not create it, the install skips it and warns you, unless you pass `--force`.
+- **What you already had stays yours.** If a skill, command or agent file, or an MCP server entry with the
+  same name, already exists and this bundle did not create it, the install leaves it alone: an identical one
+  is kept as it is, a different one is skipped with a warning. `--force` takes it over (and `uninstall` will
+  then remove it). A Codex `config.toml` that already defines one of the bundle's `[mcp_servers.<name>]`
+  tables is skipped with a warning, because Codex rejects a table defined twice.
 
 ## Use as a template
 
