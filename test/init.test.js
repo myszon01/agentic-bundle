@@ -13,7 +13,8 @@ const TOOL = '@myszon01/agentic-bundle';
 function templateCopy() {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'agentic-bundle-init-'));
   for (const f of ['package.json', 'README.md', 'SETUP-SERVICE.md', 'CLAUDE.md', 'LICENSE', '.gitignore', '.nvmrc', 'harness', 'scripts', '.github', 'lib', 'bin', 'docs', 'test']) {
-    cpSync(path.join(ROOT, f), path.join(dir, f), { recursive: true });
+    // A repository made from the template has already run init, which removes some of these.
+    if (existsSync(path.join(ROOT, f))) cpSync(path.join(ROOT, f), path.join(dir, f), { recursive: true });
   }
   return dir;
 }
@@ -24,6 +25,8 @@ const runAll = (dir, ...args) => spawnSync(process.execPath, ['scripts/init.js',
 // This checkout's CLI, standing in for the one a harness-only repository installs from npm.
 const cli = (dir, ...args) => execFileSync(process.execPath, [path.join(ROOT, 'bin/agentic-bundle.js'), ...args], { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
 const json = (dir, f) => JSON.parse(readFileSync(path.join(dir, f), 'utf8'));
+// init only makes sense on the template itself; in a repository made from it, init has already run.
+const initTest = (name, fn) => test(name, { skip: json(ROOT, 'package.json').name !== TOOL && 'template only: init already ran here' }, fn);
 const writeJson = (dir, f, v) => writeFileSync(path.join(dir, f), `${JSON.stringify(v, null, 2)}\n`);
 // The tool, run by its scoped name: the unscoped "agentic-bundle" on npm is not this tool.
 const NPX = `npx ${TOOL}`;
@@ -31,7 +34,7 @@ const UNSCOPED_NPX = /npx (-y )?agentic-bundle/;
 // Everything a harness-only repository keeps at its root: nothing else of the tool's survives.
 const HARNESS_REPO_FILES = ['.github', '.gitignore', '.nvmrc', 'LICENSE', 'README.md', 'harness', 'package.json', 'scripts'];
 
-test('init renames the CLI, bundle, owner and README references', () => {
+initTest('init renames the CLI, bundle, owner and README references', () => {
   const dir = templateCopy();
   const before = json(ROOT, 'package.json').name;
   run(dir, '--repo', 'Acme/My-Plugin', '--description', 'Acme tools');
@@ -60,7 +63,7 @@ test('init renames the CLI, bundle, owner and README references', () => {
   assert.equal(pkg.devDependencies, undefined);
 });
 
-test('init removes the template\'s setup-service page and README section', () => {
+initTest('init removes the template\'s setup-service page and README section', () => {
   const dir = templateCopy();
   assert.ok(readFileSync(path.join(dir, 'README.md'), 'utf8').includes('<!-- setup-service -->'), 'the template README has the section');
   run(dir, '--repo', 'acme/tools');
@@ -70,7 +73,7 @@ test('init removes the template\'s setup-service page and README section', () =>
   assert.match(readme, /## Development[\s\S]*## License/);
 });
 
-test('init --clean leaves an empty but valid harness, and can be re-run', async () => {
+initTest('init --clean leaves an empty but valid harness, and can be re-run', async () => {
   const dir = templateCopy();
   run(dir, '--repo', 'acme/first', '--clean');
   run(dir, '--repo', 'acme/second', '--scope', '@acme-tools');
@@ -85,11 +88,11 @@ test('init --clean leaves an empty but valid harness, and can be re-run', async 
   assert.ok(existsSync(path.join(dir, 'harness/AGENTS.md')));
 });
 
-test('init rejects names that are not kebab-case', () => {
+initTest('init rejects names that are not kebab-case', () => {
   assert.throws(() => run(templateCopy(), '--repo', 'acme/x', '--name', 'Not_Kebab'), /kebab-case/);
 });
 
-test('init --harness-only removes the copy of the tool and installs it from npm', () => {
+initTest('init --harness-only removes the copy of the tool and installs it from npm', () => {
   const dir = templateCopy();
   const { version } = json(ROOT, 'package.json');
   const { stdout, stderr } = runAll(dir, '--repo', 'acme/team-harness', '--harness-only');
@@ -141,7 +144,7 @@ test('init --harness-only removes the copy of the tool and installs it from npm'
   assert.deepEqual(readdirSync(target), []);
 });
 
-test('init --harness-only keeps your own tests and edits, and can be re-run', () => {
+initTest('init --harness-only keeps your own tests and edits, and can be re-run', () => {
   const dir = templateCopy();
   const { version } = json(ROOT, 'package.json');
   writeFileSync(path.join(dir, 'test/harness.test.js'), "import { test } from 'node:test';\ntest('harness', () => {});\n");
@@ -178,7 +181,7 @@ test('init --harness-only keeps your own tests and edits, and can be re-run', ()
   assert.ok(readme.includes(`npm install -D ${TOOL}@latest`), 'renaming the scope leaves the tool\'s name alone');
 });
 
-test('init --harness-only converts an initialised copy only without --clean, and keeps its README', () => {
+initTest('init --harness-only converts an initialised copy only without --clean, and keeps its README', () => {
   const dir = templateCopy();
   run(dir, '--repo', 'acme/tools');
   const files = () => ['package.json', 'README.md', 'harness/bundle.json'].map((f) => readFileSync(path.join(dir, f), 'utf8'));
@@ -204,7 +207,7 @@ test('init --harness-only converts an initialised copy only without --clean, and
   assert.doesNotMatch(stderr, UNSCOPED_NPX);
 });
 
-test('init --clean --harness-only starts a fresh copy with an empty harness', () => {
+initTest('init --clean --harness-only starts a fresh copy with an empty harness', () => {
   const dir = templateCopy();
   run(dir, '--repo', 'acme/tools', '--clean', '--harness-only');
   assert.deepEqual(readdirSync(path.join(dir, 'harness/skills')), ['.gitkeep']);

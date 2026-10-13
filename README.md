@@ -221,9 +221,9 @@ npm install
 This keeps `harness/` (renamed as above) and removes the copy of the tool: `lib/`, `bin/`, its tests and
 docs, its contributor notes in `CLAUDE.md`, the packaging scripts and `release.yml`. `package.json` becomes
 private, with the agentic-bundle CLI from npm as a dev dependency at the template's version (`latest` for a
-copy that was already renamed), and loses the scripts that build npm packages. Then
-`npx @myszon01/agentic-bundle validate` and `install` run the released tool, the installed dev dependency
-(always use the scoped name: the unscoped `agentic-bundle` on npm is not this tool), and updating it is an
+copy that was already renamed), and loses the scripts that build npm packages. Then `npm run validate` and
+the `npx` commands in the README that init writes run the released tool, the installed dev dependency (they
+use the tool's scoped npm name: the unscoped `agentic-bundle` on npm is not this tool), and updating it is an
 ordinary dependency bump. `ci.yml` is replaced by one that checks just the harness on Linux with Node 24
 and 26 (validate, build and an install round trip, plus `npm test` if you have tests), still behind a
 single `ci-ok` check. Your own files and tests are kept, and re-running init doesn't convert anything

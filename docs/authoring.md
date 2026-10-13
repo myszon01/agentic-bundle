@@ -167,8 +167,9 @@ names such as `mcp__fetch__fetch`, ideally together with `targets:`.
 
 Reference environment variables as `${VAR}`. They are converted per tool: kept as-is for Claude Code, `{env:VAR}` for OpenCode, and `env_vars` / `bearer_token_env_var` / `env_http_headers`
 for Codex. Codex expands references only through `env` and `headers`: a `${VAR}` in `command`, `args`, `url`
-or `cwd` is written literally, and `build` / `install` warn about it. Pass the value through `env` (or a
-header whose whole value is `${VAR}`), or leave `codex` out of that server's `targets`.
+or `cwd` is written literally, and `build` / `install` warn about it. Use a literal path in `command` and
+`cwd`; pass an `args` value through `env` if the server reads it from there; move a `url` value into a header
+whose whole value is `${VAR}` if the server accepts one; or leave `codex` out of that server's `targets`.
 
 **Never put secret values in `mcp.json`.** `validate` warns when a literal `env` or `headers` value looks
 like a token (for example `ghp_…`, `github_pat_…`, `sk-…`, `xoxb-…`, `AKIA…`, `glpat-…`, `npm_…`, a private

@@ -125,12 +125,12 @@ test('codex: warns about env references it would write literally', () => {
     { name: 'remote', url: 'https://x/${ORG}/mcp', headers: { Authorization: 'Bearer ${TOKEN}', 'X-Org': '${ORG}' } },
     { name: 'clean', command: 'srv', args: ['--x'], env: { MODE: 'fast' } },
   ], (w) => warnings.push(w));
-  const tail = (via) => `which Codex does not expand, so it is written literally; pass the value ${via}, or leave codex out of the server's "targets"`;
+  const tail = (hint) => `which Codex does not expand, so it is written literally; ${hint}, or leave codex out of the server's "targets"`;
   assert.deepEqual(warnings, [
-    `Codex: "command" of MCP server "local" uses \${BIN_DIR}, ${tail('through "env"')}`,
-    `Codex: "args" of MCP server "local" uses \${TOKEN}, \${ORG}, ${tail('through "env"')}`,
-    `Codex: "cwd" of MCP server "local" uses \${HOME}, ${tail('through "env"')}`,
-    `Codex: "url" of MCP server "remote" uses \${ORG}, ${tail('in a header whose whole value is ${VAR}')}`,
+    `Codex: "command" of MCP server "local" uses \${BIN_DIR}, ${tail('write a literal path (or wrap the server in a script)')}`,
+    `Codex: "args" of MCP server "local" uses \${TOKEN}, \${ORG}, ${tail('pass it through "env" if the server reads it from there')}`,
+    `Codex: "cwd" of MCP server "local" uses \${HOME}, ${tail('write a literal path')}`,
+    `Codex: "url" of MCP server "remote" uses \${ORG}, ${tail('move it into a header whose whole value is ${VAR} if the server accepts one')}`,
   ]);
 });
 

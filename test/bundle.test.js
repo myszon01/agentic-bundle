@@ -72,6 +72,8 @@ test('files a level too deep are reported instead of silently ignored', async ()
     'commands/git/README.md': '# Notes\n',
     'agents/team/helper.md': '---\ndescription: Helps\n---\nHelp.\n',
     'skills/nested/inner/SKILL.md': skill('inner'),
+    // ...and only that SKILL.md: the nested skill's own files are not reported as more skills.
+    'skills/nested/inner/references/SKILL.md': skill('ref'),
     // Files inside a real skill are part of it (copied as they are), never reported.
     'skills/real-skill/SKILL.md': skill('real-skill'),
     'skills/real-skill/references/SKILL.md': skill('other'),
