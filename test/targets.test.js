@@ -88,6 +88,22 @@ test('pi: skips MCP and agents with warnings, keeps $ARGUMENTS (pi supports it n
   assert.match(text(find(entries, '.pi/prompts/review.md')), /review \$ARGUMENTS\./);
 });
 
+test('installRoots says what the other scope writes in the same root', () => {
+  withEnv({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u/.codex' }, () => {
+    const paths = (entries) => entries?.map((e) => e.path);
+    // Claude Code: a project install in ~ shares its root with the user install, and only there.
+    const [inHome] = installRoots(TARGETS.claude, bundle, { scope: 'project', dir: '/home/u', warn: noop });
+    assert.ok(paths(inHome.other).includes('.claude/CLAUDE.md') && paths(inHome.other).includes('.claude.json'));
+    assert.equal(installRoots(TARGETS.claude, bundle, { scope: 'project', dir: '/p', warn: noop })[0].other, undefined);
+    const [user] = installRoots(TARGETS.claude, bundle, { scope: 'user', dir: '/p', warn: noop });
+    assert.ok(paths(user.other).includes('CLAUDE.md') && paths(user.other).includes('.mcp.json'), 'project layout at ~, whatever --dir is');
+    // Codex: the user roots are never a project install's root unless --dir points there.
+    const codex = installRoots(TARGETS.codex, bundle, { scope: 'user', dir: '/p', warn: noop });
+    assert.ok(codex.every((g) => paths(g.other).includes('.agents/skills/code-review/SKILL.md')));
+    assert.equal(installRoots(TARGETS.codex, bundle, { scope: 'project', dir: '/home/u', warn: noop })[0].other, undefined);
+  });
+});
+
 test('codex: skills go to .agents/skills and agents become TOML files', () => {
   const project = TARGETS.codex.install(bundle, { scope: 'project', dir: '/p', warn: noop }).entries;
   assert.ok(find(project, '.agents/skills/code-review/SKILL.md'));
@@ -99,7 +115,7 @@ test('codex: skills go to .agents/skills and agents become TOML files', () => {
   const [codexHome, home] = user({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u/.codex' });
   assert.equal(codexHome.root, '/home/u/.codex');
   assert.ok(find(codexHome.entries, 'agents/researcher.toml') && !codexHome.entries.some((e) => e.path.startsWith('skills/')));
-  // Not ~ itself: a manifest there belongs to a project install run in the home directory.
+  // Not ~ itself: the user skills root is ~/.agents.
   assert.equal(home.root, '/home/u/.agents');
   assert.deepEqual(home.entries.map((e) => e.path).filter((p) => p.endsWith('SKILL.md')).sort(),
     ['skills/code-review/SKILL.md', 'skills/conventional-commits/SKILL.md']);

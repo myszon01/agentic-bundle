@@ -19,6 +19,12 @@ Canonical tool names become `allowed-tools` (commands) and `tools` (agents). Cla
 `list` becomes `Glob`, and `todo` becomes `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate` plus `TodoWrite`
 (off by default since the Task tools replaced it). See [authoring.md](authoring.md#canonical-tool-names).
 
+A project install run in your home directory and the user install both write `~/.claude/{skills,commands,agents}`.
+They keep separate records (`~/.agentic-bundle/<bundle>.claude.json` and `<bundle>.claude.user.json`), and a shared
+file stays until both are uninstalled. Version 0.2.0 named both records `<bundle>.claude.json`. Such a record is
+treated as the user install's unless it lists `CLAUDE.md` or `.mcp.json`, and it is renamed the first time either
+scope runs.
+
 The package is a Claude Code **plugin** with its own single-plugin `marketplace.json`:
 
 ```
@@ -80,9 +86,10 @@ The package mirrors `~/.codex`, except that its `skills/` belongs in `~/.agents/
 
 Codex reads user skills from `~/.agents/skills`; `$CODEX_HOME/skills` (`~/.codex/skills`) still works but is
 deprecated. Earlier versions of agentic-bundle installed user skills there. Installing again moves them, and
-`uninstall` removes them from either place. User skills keep their own manifest in `~/.agents/.agentic-bundle/`,
-apart from the one a project install run in your home directory keeps in `~/.agentic-bundle/`. OpenCode also
-loads `~/.agents/skills` (see above).
+`uninstall` removes them from either place. The user install keeps its records in `~/.codex/.agentic-bundle/` and
+`~/.agents/.agentic-bundle/` (`<bundle>.codex.user.json`). A project install run in your home directory writes some
+of the same files (`~/.codex/agents/`, the `~/.codex/config.toml` block, `~/.agents/skills/`); they stay until both
+are uninstalled. OpenCode also loads `~/.agents/skills` (see above).
 
 Codex expands `${VAR}` only through `env_vars`, `env_http_headers` and `bearer_token_env_var`. A reference in an
 MCP server's `command`, `args`, `url` or `cwd` is written as literal text, so `build` and `install` warn about it.
@@ -95,7 +102,7 @@ when the harness's `AGENTS.md` is longer.
    `npmUsage` returns the Markdown install steps for the README of the tool's npm package.
    Both functions return entries (`file`, `block` or `json`, see `lib/targets/common.js`). The writer handles
    merging, manifests and uninstalling. When a tool reads files from more than one directory, `install` can
-   return a list of `{ root, entries }`; each root gets its own manifest.
+   return a list of `{ root, entries }`; each root gets its own manifest per scope.
 2. Register it in `lib/targets/index.js`, and add tool names to `lib/tools.js` if the tool supports subagents.
 3. Add a test in `test/targets.test.js` and a section to this file. CI and the release workflow pick up the
    new target automatically (`scripts/packages.js`).

@@ -164,8 +164,13 @@ Things Trusted Publishing can't do, such as `npm deprecate`, are done by hand wi
   or `AGENTS.md`. MCP servers are merged key by key into `.mcp.json`, `opencode.json`,
   or `~/.claude.json`, and into a marked block in Codex's `config.toml`.
   Everything else in those files is left untouched.
-- **Every write is recorded** in `.agentic-bundle/<bundle>.<target>.json`. Re-installing updates in place
-  and removes anything you deleted from the harness. `uninstall` removes exactly what was added.
+- **Every write is recorded** in `.agentic-bundle/<bundle>.<target>.json` (`<bundle>.<target>.user.json` for
+  `--scope user`). Re-installing updates in place and removes anything you deleted from the harness.
+  `uninstall` removes exactly what was added. Installs made by 0.2.0 are picked up; the first run after
+  upgrading renames a user install's record.
+- **Overlapping installs share.** A file or managed block that two installs of the same bundle both write
+  stays until the last of them is uninstalled. One example is `~/.claude/skills/`, written both by a project
+  install run in your home directory and by `--scope user`.
 - **What you already had stays yours.** If a skill, command or agent file, or an MCP server entry with the
   same name, already exists and this bundle did not create it, the install leaves it alone: an identical one
   is kept as it is, a different one is skipped with a warning. `--force` takes it over (and `uninstall` will
