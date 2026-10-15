@@ -63,6 +63,7 @@ harness/                 ← the only part you normally edit
 bin/ lib/                the CLI and one adapter per tool (lib/targets/*.js)
 docs/authoring.md        file formats and the canonical tool vocabulary
 docs/targets.md          where everything lands for each tool, and how to add a tool
+docs/distribution.md     public npm, a private npm scope, a private git repo, a private Claude marketplace
 test/                    node:test suite
 ```
 
@@ -84,7 +85,11 @@ If you give none, the `targets` list in `bundle.json` is used.
 
 ## Distributing
 
-Everything is published to npm, so nobody needs access to this repository. A release produces six packages:
+Everything is published to npm, so nobody needs access to this repository. To keep a harness private instead
+(a restricted npm scope, a private git repository with no registry, or a private Claude Code marketplace), see
+[docs/distribution.md](docs/distribution.md).
+
+A release produces five packages:
 
 | package | for | install with |
 |---------|-----|--------------|
@@ -92,7 +97,7 @@ Everything is published to npm, so nobody needs access to this repository. A rel
 | `@myszon01/agentic-bundle-claude` | Claude Code plugin | `tar -xzf "$(npm pack @myszon01/agentic-bundle-claude \| tail -1)"`, then `claude plugin marketplace add ./package` |
 | `@myszon01/agentic-bundle-pi` | pi package | `pi install npm:@myszon01/agentic-bundle-pi` |
 | `@myszon01/agentic-bundle-opencode` | OpenCode project files | the CLI, or unpack and copy into a project |
-| `@myszon01/agentic-bundle-codex` | `~/.codex` files | the CLI, or unpack and copy into `~/.codex` |
+| `@myszon01/agentic-bundle-codex` | `~/.codex` files | the CLI, or unpack and copy into `~/.codex` (skills into `~/.agents/skills`) |
 
 Each tool package carries a README with its exact install steps. The CLI is the only route that applies
 every feature for every tool and merges with existing config, so prefer it when in doubt.
@@ -140,9 +145,10 @@ The first release (`v0.1.0`) needs no version bump: tag the current `main`.
 1. Create the `@myszon01` scope on npmjs.com (it's your npm username, or an org with that name), and turn
    on 2FA for your account. If the name differs, change `name` in `package.json` and `npm.scope` in
    `harness/bundle.json` (or run `npm run init`).
-2. For the first release, create a granular access token with read/write access to that scope; it does
+2. **First release only:** create a granular access token with read/write access to that scope; it does
    **not** need to bypass 2FA. Add it as the repository secret `NPM_TOKEN` (*Settings → Secrets and
-   variables → Actions*). The first release is staged; approve it with `npm run approve`.
+   variables → Actions*). The first release is staged; approve it with `npm run approve`. You delete this
+   secret again in step 3.
 3. Then switch to Trusted Publishing: on npmjs.com, for each package, open *Settings → Trusted
    Publisher → GitHub Actions* and enter this repository and `release.yml` (or run
    `npm trust github <package> --file release.yml --repo myszon01/agentic-bundle`). Set the repository
@@ -160,8 +166,11 @@ Things Trusted Publishing can't do, such as `npm deprecate`, are done by hand wi
   Everything else in those files is left untouched.
 - **Every write is recorded** in `.agentic-bundle/<bundle>.<target>.json`. Re-installing updates in place
   and removes anything you deleted from the harness. `uninstall` removes exactly what was added.
-- **Foreign files are never clobbered.** If a skill, command or agent file already exists and this bundle
-  did not create it, the install skips it and warns you, unless you pass `--force`.
+- **What you already had stays yours.** If a skill, command or agent file, or an MCP server entry with the
+  same name, already exists and this bundle did not create it, the install leaves it alone: an identical one
+  is kept as it is, a different one is skipped with a warning. `--force` takes it over (and `uninstall` will
+  then remove it). A Codex `config.toml` that already defines one of the bundle's `[mcp_servers.<name>]`
+  tables is skipped with a warning, because Codex rejects a table defined twice.
 
 ## Use as a template
 
@@ -178,13 +187,48 @@ pipeline:
    This renames the CLI (`@<owner>/<repo>`), the tool packages (`@<owner>/<repo>-<tool>`), the bundle,
    `CODEOWNERS`, `LICENSE` and the README. Override the defaults with `--name`, `--scope @npm-scope`,
    `--description` or `--author`. Leave out `--clean` to keep the example skills as a starting point.
+   If the repository only shares a harness, add `--harness-only` (see below).
 3. Write your instructions, skills, commands, agents and MCP servers in `harness/`, then run
-   `npm test && npm run validate`, commit and open a pull request.
-4. Per repository, once: add the `NPM_TOKEN` secret (see [Releasing](#releasing)), and recreate any branch
-   rules. GitHub doesn't copy secrets or rulesets from a template.
+   `npm test && npm run validate`, commit and open a pull request. A harness-only repository gets the tool
+   from npm, so run `npm install` first (and commit `package-lock.json`), then `npm run validate`; it has no
+   `npm test` until you add tests of your own.
+4. Per repository: add the `NPM_TOKEN` secret for the first release only, then delete it once you switch to
+   Trusted Publishing (see [Releasing](#releasing)). A harness-only repository publishes nothing and needs no
+   npm token. Recreate any branch rules too. GitHub doesn't copy secrets or rulesets from a template.
 
 The tests use their own fixture harness (`test/fixtures/`), so emptying or rewriting `harness/` doesn't
 break them.
+
+### Harness-only repos (recommended for teams)
+
+A plain copy of the template carries its own copy of the CLI, so fixes released to npm never reach it. If
+the repository only holds a harness, such as a team's shared instructions and skills, and doesn't publish
+a CLI or packages of its own, make it harness-only:
+
+```bash
+npm run init -- --clean --harness-only   # a fresh copy: rename it, empty harness/, remove the tool
+npm install                              # then commit package-lock.json (CI runs npm ci)
+```
+
+To convert a copy that was already initialised, leave out `--clean`, which would empty its `harness/` (init
+refuses the combination there):
+
+```bash
+npm run init -- --harness-only           # an existing copy: keeps harness/ and your own files
+npm install
+```
+
+This keeps `harness/` (renamed as above) and removes the copy of the tool: `lib/`, `bin/`, its tests and
+docs, its contributor notes in `CLAUDE.md`, the packaging scripts and `release.yml`. `package.json` becomes
+private, with the agentic-bundle CLI from npm as a dev dependency at the template's version (`latest` for a
+copy that was already renamed), and loses the scripts that build npm packages. Then `npm run validate` and
+the `npx` commands in the README that init writes run the released tool, the installed dev dependency (they
+use the tool's scoped npm name: the unscoped `agentic-bundle` on npm is not this tool), and updating it is an
+ordinary dependency bump. `ci.yml` is replaced by one that checks just the harness on Linux with Node 24
+and 26 (validate, build and an install round trip, plus `npm test` if you have tests), still behind a
+single `ci-ok` check. Your own files and tests are kept, and re-running init doesn't convert anything
+twice. An existing copy keeps its README too, in case you edited it; init warns when it still documents
+the removed CLI, so you can replace it.
 
 ## Development
 

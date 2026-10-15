@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { loadBundle } from '../lib/bundle.js';
+import { TARGETS, installRoots } from '../lib/targets/index.js';
 import { install, markers, removeBlock, uninstall, upsertBlock } from '../lib/writer.js';
 
 const opts = { bundle: 'demo', target: 't' };
@@ -79,4 +82,141 @@ test('dry run writes nothing', async () => {
 test('refuses paths that escape the root', async () => {
   const root = await tmp();
   await assert.rejects(install([{ type: 'file', path: '../evil', content: 'x' }], root, opts), /outside/);
+});
+
+test('codex user skills installed in ~/.codex/skills by older versions are cleaned up', async () => {
+  const bundle = await loadBundle(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness'));
+  const saved = { home: process.env.AGENTIC_BUNDLE_HOME, codex: process.env.CODEX_HOME };
+  const ctx = { bundle: bundle.name, target: 'codex' };
+  try {
+    for (const action of ['reinstall', 'uninstall']) {
+      const home = await tmp();
+      process.env.AGENTIC_BUNDLE_HOME = home;
+      delete process.env.CODEX_HOME;
+      const groups = installRoots(TARGETS.codex, bundle, { scope: 'user', warn: () => {} });
+      const codexHome = path.join(home, '.codex');
+      assert.deepEqual(groups.map((g) => g.root), [codexHome, path.join(home, '.agents')]);
+
+      // What older versions installed: the same files, with skills under ~/.codex/skills.
+      await install([...groups[0].entries, ...groups[1].entries], codexHome, ctx);
+      assert.ok(existsSync(path.join(codexHome, 'skills/code-review/SKILL.md')));
+
+      if (action === 'reinstall') {
+        for (const { root, entries } of groups) await install(entries, root, ctx);
+        assert.ok(!existsSync(path.join(codexHome, 'skills')), 'old skills folder is removed');
+        assert.ok(existsSync(path.join(home, '.agents/skills/code-review/SKILL.md')));
+      }
+      for (const { root } of groups) await uninstall(root, ctx);
+      // Only the (now empty) roots themselves are left: roots are never deleted.
+      const left = (await readdir(home)).sort();
+      assert.deepEqual(left, action === 'reinstall' ? ['.agents', '.codex'] : ['.codex'], `${action}: nothing else is left behind`);
+      for (const dir of left) assert.deepEqual(await readdir(path.join(home, dir)), [], `${action}: nothing is left in ~/${dir}`);
+    }
+  } finally {
+    for (const [k, v] of [['AGENTIC_BUNDLE_HOME', saved.home], ['CODEX_HOME', saved.codex]]) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+});
+
+test('codex: the user install never shares a manifest with a project install run in ~', async () => {
+  const bundle = await loadBundle(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness'));
+  const saved = { home: process.env.AGENTIC_BUNDLE_HOME, codex: process.env.CODEX_HOME };
+  const ctx = { bundle: bundle.name, target: 'codex' };
+  const groups = (scope, dir) => installRoots(TARGETS.codex, bundle, { scope, dir, warn: () => {} });
+  const manifest = (root) => path.join(root, '.agentic-bundle', `${bundle.name}.codex.json`);
+  try {
+    delete process.env.CODEX_HOME;
+
+    // `install codex` in ~, then `install codex --scope user`: the project's agents and MCP block stay.
+    let home = await tmp();
+    process.env.AGENTIC_BUNDLE_HOME = home;
+    for (const { root, entries } of groups('project', home)) await install(entries, root, ctx);
+    const project = await readFile(manifest(home), 'utf8');
+    for (const { root, entries } of groups('user')) await install(entries, root, ctx);
+    assert.equal(await readFile(manifest(home), 'utf8'), project, 'project manifest is untouched');
+    assert.ok(existsSync(path.join(home, '.codex/agents/researcher.toml')));
+    assert.match(await read(home, '.codex/config.toml'), /\[mcp_servers\.fetch\]/);
+
+    // `install codex --scope user`, then `uninstall codex` in ~: there is no project install to remove.
+    home = await tmp();
+    process.env.AGENTIC_BUNDLE_HOME = home;
+    for (const { root, entries } of groups('user')) await install(entries, root, ctx);
+    assert.ok(existsSync(manifest(path.join(home, '.agents'))), 'user skills have their own manifest in ~/.agents');
+    for (const { root } of groups('project', home)) assert.equal(await uninstall(root, ctx), false);
+    assert.ok(existsSync(path.join(home, '.agents/skills/code-review/SKILL.md')));
+  } finally {
+    for (const [k, v] of [['AGENTIC_BUNDLE_HOME', saved.home], ['CODEX_HOME', saved.codex]]) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+});
+
+test('files the user already had are never taken over, even when identical', async () => {
+  const root = await tmp();
+  await mkdir(path.join(root, 'skills/a'), { recursive: true });
+  await writeFile(path.join(root, 'skills/a/SKILL.md'), 'a');
+  const logs = [];
+  const next = await install([{ type: 'file', path: 'skills/a/SKILL.md', content: 'a' }], root, { ...opts, log: (l) => logs.push(l) });
+  assert.deepEqual(next.files, []);
+  assert.match(logs.join('\n'), /keep skills\/a\/SKILL\.md/);
+  await uninstall(root, opts);
+  assert.equal(await read(root, 'skills/a/SKILL.md'), 'a');
+});
+
+test('JSON keys the user already had are kept, not overwritten or removed', async () => {
+  const root = await tmp();
+  const mine = { mcpServers: { same: { command: 'x' }, theirs: { command: '/home/dev/bin/srv' }, other: { command: 'o' } } };
+  await writeFile(path.join(root, '.mcp.json'), JSON.stringify(mine));
+  const value = { mcpServers: { same: { command: 'x' }, theirs: { command: 'srv' }, ours: { command: 'y' } } };
+  const owns = [['mcpServers', 'same'], ['mcpServers', 'theirs'], ['mcpServers', 'ours']];
+  const warnings = [];
+  const next = await install([{ type: 'json', path: '.mcp.json', value, owns }], root, { ...opts, warn: (w) => warnings.push(w) });
+  assert.deepEqual(next.json, [{ path: '.mcp.json', owns: [['mcpServers', 'ours']] }]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /skipped mcpServers\.theirs in \.mcp\.json/);
+  assert.deepEqual(JSON.parse(await read(root, '.mcp.json')).mcpServers.theirs, { command: '/home/dev/bin/srv' });
+
+  await uninstall(root, opts);
+  assert.deepEqual(JSON.parse(await read(root, '.mcp.json')), mine);
+
+  await install([{ type: 'json', path: '.mcp.json', value, owns }], root, { ...opts, force: true });
+  assert.deepEqual(JSON.parse(await read(root, '.mcp.json')).mcpServers.theirs, { command: 'srv' });
+});
+
+test('a TOML block is skipped when it would define a table twice', async () => {
+  const root = await tmp();
+  const config = 'model = "m"\n\n[mcp_servers."docs"]\ncommand = "mine"\n';
+  await writeFile(path.join(root, 'config.toml'), config);
+  const warnings = [];
+  const block = { type: 'block', path: 'config.toml', content: '[mcp_servers.docs]\ncommand = "ours"\n\n[mcp_servers.new]\ncommand = "n"', syntax: 'toml' };
+  const next = await install([block], root, { ...opts, warn: (w) => warnings.push(w) });
+  assert.deepEqual(next.blocks, []);
+  assert.match(warnings.join('\n'), /\[mcp_servers\.docs\] already defined outside the demo block/);
+  assert.equal(await read(root, 'config.toml'), config);
+
+  await writeFile(path.join(root, 'config.toml'), 'model = "m"\n\n[[profiles]]\nname = "a"\n');
+  await install([{ ...block, content: '[mcp_servers.new]\ncommand = "n"' }], root, opts);
+  assert.match(await read(root, 'config.toml'), /\[mcp_servers\.new\]/);
+});
+
+test('uninstall gives instruction files and untouched JSON back byte for byte', async () => {
+  const root = await tmp();
+  const mine = '# Mine\n\n\n\nkept as written';
+  await writeFile(path.join(root, 'CLAUDE.md'), mine);
+  const json = '{"mcpServers": {"theirs": {"command": "x"}}}';
+  await writeFile(path.join(root, '.mcp.json'), json);
+  const entries = [
+    { type: 'block', path: 'CLAUDE.md', content: 'shared', syntax: 'md' },
+    { type: 'json', path: '.mcp.json', value: { mcpServers: { theirs: { command: 'x' } } }, owns: [['mcpServers', 'theirs']] },
+  ];
+  await install(entries, root, { bundle: 'demo', target: 'a' });
+  await install(entries.slice(0, 1), root, { bundle: 'demo', target: 'b' });
+  assert.equal(await read(root, '.mcp.json'), json);
+  await uninstall(root, { bundle: 'demo', target: 'a' });
+  await uninstall(root, { bundle: 'demo', target: 'b' });
+  assert.equal(await read(root, 'CLAUDE.md'), mine);
+  assert.equal(await read(root, '.mcp.json'), json);
 });
