@@ -15,6 +15,17 @@ These tools change quickly. If a path drifts, the fix is usually a one-line chan
 | agents        | `.claude/agents/<name>.md`       | `~/.claude/agents/`        | `agents/` |
 | MCP           | `.mcp.json` → `mcpServers`       | `~/.claude.json` → `mcpServers` | `.mcp.json` |
 
+Canonical tool names become `allowed-tools` (commands) and `tools` (agents). Claude Code has no `LS` tool, so
+`list` becomes `Glob`, and `todo` becomes `TaskCreate`, `TaskGet`, `TaskList`, `TaskUpdate` plus `TodoWrite`
+(off by default since the Task tools replaced it). See [authoring.md](authoring.md#canonical-tool-names).
+
+A project install run in your home directory and the user install both write `~/.claude/{skills,commands,agents}`.
+They keep separate records (`~/.agentic-bundle/<bundle>.claude.json` and `<bundle>.claude.user.json`), and a shared
+file stays until both are uninstalled. Version 0.2.0 named both records `<bundle>.claude.json`. Such a record is
+treated as the user install's unless it lists `CLAUDE.md` or `.mcp.json` (whatever the harness has today), and it
+is renamed the first time either scope runs. A record that can't be read stops the command with its path, rather
+than risk deleting a file it lists; fix it, or delete it and install again.
+
 The package is a Claude Code **plugin** with its own single-plugin `marketplace.json`:
 
 ```
@@ -32,10 +43,14 @@ The package is a Claude Code **plugin** with its own single-plugin `marketplace.
 | agents    | `.opencode/agents/<name>.md` (`mode: subagent`, tools as a `permission` map: `"*": deny` plus the listed tools) | `agents/` |
 | MCP       | `opencode.json` → `mcp` (`local` / `remote`) | `opencode.json` |
 
-The package is the project layout; copy `dist/opencode/.` into a repository. `opencode.jsonc` files with
-comments are not merged automatically; the installer prints the keys to add by hand. OpenCode also loads
-`~/.claude/skills` and `~/.agents/skills` by default (`OPENCODE_DISABLE_EXTERNAL_SKILLS=1` turns that off),
-so skills installed for other tools can show up twice.
+The package is the project layout; copy `dist/opencode/.` into a repository.
+
+MCP servers are merged into `opencode.json` only. If that file isn't plain JSON (for example, it has comments),
+it is left unchanged and the installer prints the keys to add by hand. An `opencode.jsonc` is never read or
+changed: the servers go into an `opencode.json` next to it, and OpenCode loads and merges both files.
+
+OpenCode also loads `~/.claude/skills` and `~/.agents/skills` by default (`OPENCODE_DISABLE_EXTERNAL_SKILLS=1`
+turns that off), so skills installed for other tools can show up twice.
 
 ## pi (`pi`)
 
@@ -60,21 +75,35 @@ pi install ./dist/pi
 | harness   | project                           | user (`~/.codex`, or `$CODEX_HOME`) |
 |-----------|-----------------------------------|-------------------------------------|
 | AGENTS.md | `AGENTS.md` (managed block)       | `AGENTS.md`                         |
-| skills    | `.agents/skills/<name>/`          | `skills/`                           |
-| commands  | not available per project (warning) | `prompts/<name>.md` (deprecated by Codex in favour of skills) |
+| skills    | `.agents/skills/<name>/`          | `~/.agents/skills/<name>/` (not under `$CODEX_HOME`) |
+| commands  | not available per project (warning) | `prompts/<name>.md` (deprecated by Codex in favour of skills; `model` dropped with a warning) |
 | agents    | `.codex/agents/<name>.toml` (`developer_instructions`; `tools` dropped, `model` only from a `codex` key) | `agents/` |
 | MCP       | `.codex/config.toml` (managed block) | `config.toml` (managed block)    |
 
 Codex only reads a project's `.codex/config.toml` once that project is **trusted**, either by accepting
 the trust prompt or with `[projects."<path>"] trust_level = "trusted"` in `~/.codex/config.toml`.
-The package mirrors `~/.codex`. Copy it in and append `config.toml` to your existing one.
+The package mirrors `~/.codex`, except that its `skills/` belongs in `~/.agents/skills`. Copy it in and append
+`config.toml` to your existing one.
+
+Codex reads user skills from `~/.agents/skills`; `$CODEX_HOME/skills` (`~/.codex/skills`) still works but is
+deprecated. Earlier versions of agentic-bundle installed user skills there. Installing again moves them, and
+`uninstall` removes them from either place. The user install keeps its records in `~/.codex/.agentic-bundle/` and
+`~/.agents/.agentic-bundle/` (`<bundle>.codex.user.json`). A project install run in your home directory writes some
+of the same files (`~/.codex/agents/`, the `~/.codex/config.toml` block, `~/.agents/skills/`); they stay until both
+are uninstalled. OpenCode also loads `~/.agents/skills` (see above).
+
+Codex expands `${VAR}` only through `env_vars`, `env_http_headers` and `bearer_token_env_var`. A reference in an
+MCP server's `command`, `args`, `url` or `cwd` is written as literal text, so `build` and `install` warn about it.
+Codex also reads only the first 32 KiB of `AGENTS.md` by default (`project_doc_max_bytes`); `validate` warns
+when the harness's `AGENTS.md` is longer.
 
 ## Adding a target
 
 1. Create `lib/targets/<id>.js` that exports `{ id, label, supports, install(bundle, ctx), package(bundle, ctx), npmUsage({ name, cli, bundle }) }`.
    `npmUsage` returns the Markdown install steps for the README of the tool's npm package.
    Both functions return entries (`file`, `block` or `json`, see `lib/targets/common.js`). The writer handles
-   merging, manifests and uninstalling.
+   merging, manifests and uninstalling. When a tool reads files from more than one directory, `install` can
+   return a list of `{ root, entries }`; each root gets its own manifest per scope.
 2. Register it in `lib/targets/index.js`, and add tool names to `lib/tools.js` if the tool supports subagents.
 3. Add a test in `test/targets.test.js` and a section to this file. CI and the release workflow pick up the
    new target automatically (`scripts/packages.js`).
