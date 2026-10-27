@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { chmod, chown, mkdtemp, mkdir, readFile, readdir, realpath, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -12,7 +12,11 @@ import { install, markers, removeBlock, uninstall, upsertBlock } from '../lib/wr
 const opts = { bundle: 'demo', target: 't' };
 const HARNESS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'harness');
 
-/** What 0.2.0 wrote: the same manifest, named <bundle>.<target>.json in both scopes and without a scope field. */
+/**
+ * A manifest shaped like 0.2.0's: named <bundle>.<target>.json in both scopes, without a scope field. Unlike 0.2.0,
+ * install() here leaves files and keys that were already there unmanaged, so tests that need 0.2.0's records of
+ * those write them explicitly.
+ */
 async function legacyInstall(entries, root, ctx) {
   const { scope, ...manifest } = await install(entries, root, ctx);
   await writeFile(path.join(root, '.agentic-bundle', `${ctx.bundle}.${ctx.target}.json`), JSON.stringify(manifest));
@@ -20,8 +24,8 @@ async function legacyInstall(entries, root, ctx) {
 
 /** Install or uninstall like the CLI: every root of the scope, with what the other scope writes there. */
 async function cli(command, bundle, target, scope, dir, logs = [], extra = {}) {
-  for (const { root, entries, other } of installRoots(TARGETS[target], bundle, { scope, dir, warn: () => {} })) {
-    const ctx = { bundle: bundle.name, target, scope, entries, other, log: (l) => logs.push(l), ...extra };
+  for (const { root, entries, layouts } of installRoots(TARGETS[target], bundle, { scope, dir, warn: () => {} })) {
+    const ctx = { bundle: bundle.name, target, scope, layouts, log: (l) => logs.push(l), ...extra };
     if (command === 'install') await install(entries, root, ctx);
     else await uninstall(root, ctx);
   }
@@ -336,17 +340,27 @@ test('claude: a 0.2.0 manifest in ~ belongs to the scope that wrote it', async (
 
 test('claude: a 0.2.0 user manifest written after an upgrade is merged into the user manifest', async () => {
   const bundle = await loadBundle(HARNESS);
-  await withHome(async (home) => {
-    await cli('install', bundle, 'claude', 'user');
-    const [user] = installRoots(TARGETS.claude, bundle, { scope: 'user', warn: () => {} });
-    await legacyInstall(user.entries, user.root, { bundle: bundle.name, target: 'claude' }); // 0.2.0 run again
-    await cli('install', bundle, 'claude', 'project', home);
-    assert.deepEqual(await readdir(path.join(home, '.agentic-bundle')), [`${bundle.name}.claude.json`, `${bundle.name}.claude.user.json`]);
-    assert.ok(JSON.parse(await read(home, '.claude.json')).mcpServers.fetch, 'the user install keeps its MCP server');
-    await cli('uninstall', bundle, 'claude', 'user');
-    await cli('uninstall', bundle, 'claude', 'project', home);
-    assert.deepEqual(await readdir(home), []);
-  });
+  // Each record holds something the other lacks: a skill, an MCP server, and (one side or the other) the block.
+  for (const blockIn of ['new', '0.2.0']) {
+    await withHome(async (home) => {
+      await cli('install', blockIn === 'new' ? bundle : { ...bundle, instructions: null }, 'claude', 'user');
+      const [user] = installRoots(TARGETS.claude, bundle, { scope: 'user', warn: () => {} });
+      const legacy = user.entries
+        .filter((e) => !e.path.startsWith('.claude/skills/conventional-commits/') && !(blockIn === 'new' && e.type === 'block'))
+        .map((e) => (e.type === 'json' ? { ...e, value: { mcpServers: { old: { command: 'old' } } }, owns: [['mcpServers', 'old']] } : e));
+      legacy.push({ type: 'file', path: '.claude/skills/old/SKILL.md', content: 'old' });
+      await legacyInstall(legacy, user.root, { bundle: bundle.name, target: 'claude' }); // a pinned 0.2.0 run again
+      await cli('install', bundle, 'claude', 'project', home);
+      assert.deepEqual(await readdir(path.join(home, '.agentic-bundle')), [`${bundle.name}.claude.json`, `${bundle.name}.claude.user.json`]);
+      const merged = JSON.parse(await read(home, `.agentic-bundle/${bundle.name}.claude.user.json`));
+      for (const f of ['.claude/skills/conventional-commits/SKILL.md', '.claude/skills/old/SKILL.md']) assert.ok(merged.files.includes(f), `${blockIn}: ${f}`);
+      assert.deepEqual(merged.blocks.map((b) => b.path), ['.claude/CLAUDE.md'], blockIn);
+      assert.deepEqual(merged.json[0].owns.map((k) => k[1]).sort(), ['fetch', 'old'], blockIn);
+      await cli('uninstall', bundle, 'claude', 'user');
+      await cli('uninstall', bundle, 'claude', 'project', home);
+      assert.deepEqual(await readdir(home), [], `${blockIn}: nothing is left`);
+    });
+  }
 });
 
 test('claude: a dry run moves no 0.2.0 manifest and plans as if it had', async () => {
@@ -358,6 +372,7 @@ test('claude: a dry run moves no 0.2.0 manifest and plans as if it had', async (
     for (const [command, scope] of [['install', 'project'], ['uninstall', 'project'], ['install', 'user'], ['uninstall', 'user']]) {
       const logs = await cli(command, bundle, 'claude', scope, home, [], { dryRun: true });
       assert.match(logs[0], /^move \.agentic-bundle\/fixture-bundle\.claude\.json to fixture-bundle\.claude\.user\.json/);
+      assert.equal(logs[0].includes('uninstall it with --scope user'), scope === 'project', `${command} ${scope}: hint only from the project scope`);
       if (scope === 'project') assert.doesNotMatch(logs.join('\n'), /keep|remove/, `${command} ${scope}: ${logs}`);
       if (command === 'uninstall' && scope === 'user') assert.match(logs.join('\n'), /remove \.claude\/skills\/code-review\/SKILL\.md/);
     }
@@ -391,4 +406,122 @@ test('claude: files the user already had in ~/.claude stay theirs for both scope
     assert.deepEqual((await readdir(path.join(home, '.claude/commands'))).sort(), ['commit.md', 'review.md']);
     assert.equal(await read(home, '.claude/commands/review.md'), 'mine');
   });
+});
+
+test('claude: a symlinked home directory still keeps a 0.2.0 user install apart from a project install in ~', async () => {
+  const bundle = await loadBundle(HARNESS);
+  await withHome(async (home) => {
+    const link = `${home}-link`;
+    await symlink(home, link);
+    process.env.AGENTIC_BUNDLE_HOME = link; // withHome restores it
+    const [user] = installRoots(TARGETS.claude, bundle, { scope: 'user', warn: () => {} });
+    await legacyInstall(user.entries, user.root, { bundle: bundle.name, target: 'claude' });
+    // `cd ~` and the working directory is the real path, while the home directory keeps the symlink.
+    const logs = await cli('uninstall', bundle, 'claude', 'project', await realpath(link));
+    assert.match(logs[0] ?? '', /^move .*; if it was a project install here, uninstall it with --scope user\)$/);
+    assert.doesNotMatch(logs.join('\n'), /remove/);
+    assert.match(await read(home, '.claude/CLAUDE.md'), /BEGIN fixture-bundle/, 'the user install is intact');
+    await cli('uninstall', bundle, 'claude', 'user');
+    assert.deepEqual(await readdir(home), []);
+  });
+});
+
+test('claude: with a harness of files only, a project install in ~ and the user install each keep their record', async () => {
+  const bundle = { ...(await loadBundle(HARNESS)), instructions: null, mcp: [] };
+  await withHome(async (home) => {
+    await cli('install', bundle, 'claude', 'project', home);
+    await cli('install', bundle, 'claude', 'user');
+    assert.deepEqual(await readdir(path.join(home, '.agentic-bundle')), [`${bundle.name}.claude.json`, `${bundle.name}.claude.user.json`]);
+    for (const scope of ['project', 'user']) {
+      const [{ root, layouts }] = installRoots(TARGETS.claude, bundle, { scope, dir: home, warn: () => {} });
+      assert.equal(await uninstall(root, { bundle: bundle.name, target: 'claude', scope, layouts }), true, scope);
+    }
+    assert.deepEqual(await readdir(home), []);
+  });
+});
+
+test('claude: a 0.2.0 project install in ~ is recognised after the harness drops its instructions and MCP servers', async () => {
+  const full = await loadBundle(HARNESS);
+  const bare = { ...full, instructions: null, mcp: [] };
+  await withHome(async (home) => {
+    await writeFile(path.join(home, 'CLAUDE.md'), '# Mine\n');
+    const [project] = installRoots(TARGETS.claude, full, { scope: 'project', dir: home, warn: () => {} });
+    await legacyInstall(project.entries, project.root, { bundle: full.name, target: 'claude' });
+    const logs = await cli('install', bare, 'claude', 'user');
+    assert.doesNotMatch(logs.join('\n'), /move|remove|\.mcp\.json/, logs.join('\n'));
+    assert.match(await read(home, 'CLAUDE.md'), /BEGIN fixture-bundle/);
+    await cli('uninstall', bare, 'claude', 'project', home);
+    await cli('uninstall', bare, 'claude', 'user');
+    assert.deepEqual(await readdir(home), ['CLAUDE.md']);
+    assert.equal(await read(home, 'CLAUDE.md'), '# Mine\n');
+  });
+});
+
+test('opencode: a project install into the user config folder and the user install share MCP entries', async () => {
+  const bundle = await loadBundle(HARNESS);
+  for (const first of ['project', 'user']) {
+    await withHome(async (home) => {
+      const saved = process.env.XDG_CONFIG_HOME;
+      process.env.XDG_CONFIG_HOME = path.join(home, '.config');
+      try {
+        const dir = path.join(home, '.config', 'opencode');
+        await mkdir(dir, { recursive: true });
+        const second = first === 'project' ? 'user' : 'project';
+        for (const scope of [first, second]) await cli('install', bundle, 'opencode', scope, dir);
+        const logs = await cli('uninstall', bundle, 'opencode', first, dir);
+        assert.match(logs.join('\n'), /keep mcp\.fetch in opencode\.json \(still installed by/, first);
+        assert.ok(JSON.parse(await read(dir, 'opencode.json')).mcp.fetch, `${first}: the other install keeps its MCP server`);
+        await cli('uninstall', bundle, 'opencode', second, dir);
+        assert.deepEqual(await readdir(dir), [], `${first}: nothing is left`);
+      } finally {
+        if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+        else process.env.XDG_CONFIG_HOME = saved;
+      }
+    });
+  }
+});
+
+test('an unreadable record folder stops the command instead of deleting what it may record', { skip: process.getuid?.() === 0 && 'root reads any folder' }, async () => {
+  const bundle = await loadBundle(HARNESS);
+  await withHome(async (home) => {
+    await cli('install', bundle, 'codex', 'user');
+    await cli('install', bundle, 'codex', 'project', home);
+    const records = path.join(home, '.codex', '.agentic-bundle');
+    await chmod(records, 0o000);
+    try {
+      await assert.rejects(cli('uninstall', bundle, 'codex', 'project', home), /\.agentic-bundle: EACCES/);
+    } finally {
+      await chmod(records, 0o755);
+    }
+    assert.ok(existsSync(path.join(home, '.codex/agents/researcher.toml')));
+  });
+});
+
+test('a corrupt or malformed record of another install is reported with its path', async () => {
+  const bundle = await loadBundle(HARNESS);
+  for (const text of ['{"files": ', '{"files": "x"}']) {
+    await withHome(async (home) => {
+      await cli('install', bundle, 'claude', 'user');
+      const record = path.join(home, '.agentic-bundle', `${bundle.name}.claude.user.json`);
+      await writeFile(record, text);
+      // Codex's user roots are below ~, so its install reads the Claude record there.
+      await assert.rejects(cli('install', bundle, 'codex', 'user'), (e) => e.message.startsWith(`${record}: `) && /delete it and install again/.test(e.message));
+      assert.ok(!existsSync(path.join(home, '.codex')), 'nothing was written');
+    });
+  }
+});
+
+test('records above the install root that another user wrote are ignored', { skip: process.getuid?.() !== 0 && 'needs root to chown' }, async () => {
+  const outer = await tmp();
+  const root = path.join(outer, 'proj');
+  await mkdir(path.join(root, 'cmd'), { recursive: true });
+  await writeFile(path.join(root, 'cmd/x.md'), 'mine');
+  await mkdir(path.join(outer, '.agentic-bundle'));
+  const planted = path.join(outer, '.agentic-bundle', 'demo.t.json');
+  await writeFile(planted, JSON.stringify({ files: ['proj/cmd/x.md'], blocks: [], json: [] }));
+  await chown(planted, 4242, 4242);
+  const warnings = [];
+  await install([{ type: 'file', path: 'cmd/x.md', content: 'ours' }], root, { bundle: 'demo', target: 'u', warn: (w) => warnings.push(w) });
+  assert.equal(await read(root, 'cmd/x.md'), 'mine');
+  assert.match(warnings.join('\n'), /skipped cmd\/x\.md/);
 });

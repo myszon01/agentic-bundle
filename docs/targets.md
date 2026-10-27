@@ -22,8 +22,9 @@ Canonical tool names become `allowed-tools` (commands) and `tools` (agents). Cla
 A project install run in your home directory and the user install both write `~/.claude/{skills,commands,agents}`.
 They keep separate records (`~/.agentic-bundle/<bundle>.claude.json` and `<bundle>.claude.user.json`), and a shared
 file stays until both are uninstalled. Version 0.2.0 named both records `<bundle>.claude.json`. Such a record is
-treated as the user install's unless it lists `CLAUDE.md` or `.mcp.json`, and it is renamed the first time either
-scope runs.
+treated as the user install's unless it lists `CLAUDE.md` or `.mcp.json` (whatever the harness has today), and it
+is renamed the first time either scope runs. A record that can't be read stops the command with its path, rather
+than risk deleting a file it lists; fix it, or delete it and install again.
 
 The package is a Claude Code **plugin** with its own single-plugin `marketplace.json`:
 

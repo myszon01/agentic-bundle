@@ -168,8 +168,8 @@ Things Trusted Publishing can't do, such as `npm deprecate`, are done by hand wi
   `--scope user`). Re-installing updates in place and removes anything you deleted from the harness.
   `uninstall` removes exactly what was added. Installs made by 0.2.0 are picked up; the first run after
   upgrading renames a user install's record.
-- **Overlapping installs share.** A file or managed block that two installs of the same bundle both write
-  stays until the last of them is uninstalled. One example is `~/.claude/skills/`, written both by a project
+- **Overlapping installs share.** A file, managed block or MCP server entry that two installs of the same
+  bundle both write stays until the last of them is uninstalled. One example is `~/.claude/skills/`, written both by a project
   install run in your home directory and by `--scope user`.
 - **What you already had stays yours.** If a skill, command or agent file, or an MCP server entry with the
   same name, already exists and this bundle did not create it, the install leaves it alone: an identical one

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -88,19 +90,35 @@ test('pi: skips MCP and agents with warnings, keeps $ARGUMENTS (pi supports it n
   assert.match(text(find(entries, '.pi/prompts/review.md')), /review \$ARGUMENTS\./);
 });
 
-test('installRoots says what the other scope writes in the same root', () => {
+test('installRoots says what each scope writes in a root both use', () => {
   withEnv({ AGENTIC_BUNDLE_HOME: '/home/u', CODEX_HOME: '/home/u/.codex' }, () => {
-    const paths = (entries) => entries?.map((e) => e.path);
     // Claude Code: a project install in ~ shares its root with the user install, and only there.
     const [inHome] = installRoots(TARGETS.claude, bundle, { scope: 'project', dir: '/home/u', warn: noop });
-    assert.ok(paths(inHome.other).includes('.claude/CLAUDE.md') && paths(inHome.other).includes('.claude.json'));
-    assert.equal(installRoots(TARGETS.claude, bundle, { scope: 'project', dir: '/p', warn: noop })[0].other, undefined);
+    assert.ok(inHome.layouts.user.includes('.claude/CLAUDE.md') && inHome.layouts.user.includes('.claude.json'));
+    assert.ok(inHome.layouts.project.includes('CLAUDE.md') && inHome.layouts.project.includes('.mcp.json'));
+    assert.equal(installRoots(TARGETS.claude, bundle, { scope: 'project', dir: '/p', warn: noop })[0].layouts, undefined);
     const [user] = installRoots(TARGETS.claude, bundle, { scope: 'user', dir: '/p', warn: noop });
-    assert.ok(paths(user.other).includes('CLAUDE.md') && paths(user.other).includes('.mcp.json'), 'project layout at ~, whatever --dir is');
+    assert.ok(user.layouts.project.includes('CLAUDE.md') && user.layouts.project.includes('.mcp.json'), 'project layout at ~, whatever --dir is');
+    // A harness without instructions or MCP servers still shows which paths only a project install writes.
+    const bare = { ...bundle, instructions: null, mcp: [] };
+    const [bareHome] = installRoots(TARGETS.claude, bare, { scope: 'project', dir: '/home/u', warn: noop });
+    assert.ok(bareHome.layouts.project.includes('CLAUDE.md') && bareHome.layouts.project.includes('.mcp.json'));
+    assert.ok(!bareHome.entries.some((e) => e.path === 'CLAUDE.md'), 'the probe adds nothing to what is installed');
     // Codex: the user roots are never a project install's root unless --dir points there.
     const codex = installRoots(TARGETS.codex, bundle, { scope: 'user', dir: '/p', warn: noop });
-    assert.ok(codex.every((g) => paths(g.other).includes('.agents/skills/code-review/SKILL.md')));
-    assert.equal(installRoots(TARGETS.codex, bundle, { scope: 'project', dir: '/home/u', warn: noop })[0].other, undefined);
+    assert.ok(codex.every((g) => g.layouts.project.includes('.agents/skills/code-review/SKILL.md')));
+    assert.equal(installRoots(TARGETS.codex, bundle, { scope: 'project', dir: '/home/u', warn: noop })[0].layouts, undefined);
+  });
+});
+
+test('installRoots matches roots by real path, so a symlinked home directory still counts as ~', () => {
+  const real = mkdtempSync(path.join(os.tmpdir(), 'agentic-bundle-home-'));
+  const link = `${real}-link`;
+  symlinkSync(real, link);
+  withEnv({ AGENTIC_BUNDLE_HOME: link }, () => {
+    // The working directory is always a real path, while the home directory keeps its symlink spelling.
+    const [inHome] = installRoots(TARGETS.claude, bundle, { scope: 'project', dir: realpathSync(real), warn: noop });
+    assert.ok(inHome.layouts?.user.includes('.claude.json'));
   });
 });
 
