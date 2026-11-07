@@ -92,9 +92,11 @@ jobs:
           else
             cmd="npm publish"
           fi
-          flags="--access public"
+          # No --access: it would override the publishConfig.access each package carries
+          # (package.json for the CLI, npm.access in bundle.json for the tool packages).
+          flags=""
           note=""
-          if [ "$DRY_RUN" = true ]; then flags="$flags --dry-run"; note="(dry run) "; fi
+          if [ "$DRY_RUN" = true ]; then flags="--dry-run"; note="(dry run) "; fi
           $cmd "$tgz" $flags
           if [ "$MODE" = stage ]; then
             echo "${note}Staged \`$name@$version\`: approve with \`npm run approve\` (2FA)." >> "$GITHUB_STEP_SUMMARY"

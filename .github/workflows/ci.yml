@@ -61,7 +61,7 @@ jobs:
           if [ -n "$(npm view "$spec" version 2>/dev/null)" ]; then
             echo "$spec is already on npm; skipping the publish dry run (bump the version to release)."
           else
-            npm publish "$tgz" --dry-run --access public
+            npm publish "$tgz" --dry-run  # no --access: each package's publishConfig.access applies
           fi
       - uses: actions/upload-artifact@v6
         with:
